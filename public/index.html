@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GBP Sniper – Ranking Diagnosis</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--tx:#1b1b1a;--mut:#6b6b66;--bd:#e2e2dd;--ac:#0f6e56;--hi:#b3261e;--md:#b26a00;--lo:#5a5a55;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a3a29b;--bd:#3a3a37;--ac:#4cc3a0;--hi:#ff8a80;--md:#ffb74d;--lo:#a3a29b}}
+:root[data-theme="dark"]{--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a3a29b;--bd:#3a3a37;--ac:#4cc3a0;--hi:#ff8a80;--md:#ffb74d;--lo:#a3a29b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:900px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}
+p.s{color:var(--mut);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+input,select,textarea{width:100%;font-family:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+button{padding:10px 18px;border-radius:8px;border:0;background:var(--ac);color:var(--bg);font:inherit;font-weight:600;cursor:pointer;margin-right:8px}
+button.sec{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.r{border-left:4px solid var(--bd);padding:10px 12px;margin-bottom:10px;background:var(--bg);border-radius:0 8px 8px 0}
+.r.hi{border-color:var(--hi)}.r.md{border-color:var(--md)}.r.lo{border-color:var(--lo)}
+.tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.tag.hi{color:var(--hi)}.tag.md{color:var(--md)}.tag.lo{color:var(--lo)}
+.act{margin-top:6px;font-weight:600}
+ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
+.note{font-size:12px;color:var(--mut);margin-top:12px}
+#out{display:none}
+</style></head><body><div class="w">
+<h1>GBP Sniper</h1>
+<p class="s">Enter what you know about a client's listing and the competitors winning the weak zone. Get the most likely cause and the one action that matters most, not a checklist.</p>
+
+<div class="card"><h2>Live search (DataForSEO)</h2><div class="g">
+<div><label>Access code</label><input id="lcode" type="password" autocomplete="off"></div>
+<div><label>Keyword</label><input id="lkw" placeholder="gym near me"></div>
+<div><label>Location (City,State,Country)</label><input id="lloc" placeholder="Madurai,Tamil Nadu,India"></div>
+<div><label>Or coordinates lat,lng,zoom (optional)</label><input id="lcoord" placeholder="9.9252,78.1198,17z"></div>
+<div><label>Client name as on Maps (optional)</label><input id="lclient"></div></div>
+<div style="margin-top:10px"><button onclick="liveSearch()">Search and fill</button></div><div id="lmsg" class="note"></div></div>
+
+<div class="card"><h2>0. Import from DataForSEO (optional)</h2><div class="g"><div><label>Client name as on Google Maps (blank if not in results)</label><input id="impname" placeholder="e.g. Club19 The GYM"></div></div><label style="margin-top:10px">Paste the JSON response of a Google Maps search</label><textarea id="jin" rows="5" placeholder="Paste JSON here"></textarea><div style="margin-top:10px"><button onclick="importJSON()">Import and fill form</button></div><div id="imsg" class="note"></div></div>
+
+<div class="card"><h2>1. Client and keyword</h2><div class="g">
+<div><label>Business name</label><input id="name" placeholder="e.g. Smile Dental"></div>
+<div><label>Target keyword</label><input id="kw" placeholder="e.g. dentist near me"></div>
+<div><label>Keyword triggers local pack?</label><select id="pack"><option value="y">Yes</option><option value="n">No / unsure</option></select></div>
+<div><label>Category fit (ignored if categories are filled below)</label><select id="cat"><option value="match">Same as winners</option><option value="partial">Related but different</option><option value="no">Different / generic</option></select></div>
+</div></div>
+
+<div class="card"><h2>1b. Categories (comma-separated, primary first)</h2><div class="g"><div><label>Client primary</label><input id="cp" placeholder="e.g. Dental clinic"></div><div><label>Client secondary</label><input id="cs2" placeholder="e.g. Dentist, Cosmetic dentist"></div><div><label>Winner 1 (primary first)</label><input id="w1" placeholder="Dentist, Cosmetic dentist"></div><div><label>Winner 2</label><input id="w2"></div><div><label>Winner 3</label><input id="w3"></div></div><div class="note">Find them with the GMB Everywhere or PlePer Chrome extension, or the category shown under the name on Maps (primary only).</div></div>
+
+<div class="card"><h2>2. Rank by distance from business (0 = not in top 20)</h2><div class="g">
+<div><label>At business (0–0.5 km)</label><input id="r0" type="number" min="0" max="20" placeholder="blank = unknown"></div>
+<div><label>~1–2 km</label><input id="r1" type="number" min="0" max="20" placeholder="blank = unknown"></div>
+<div><label>~3–5 km</label><input id="r2" type="number" min="0" max="20" placeholder="blank = unknown"></div>
+<div><label>Service area beyond 5 km</label><input id="r3" type="number" min="0" max="20" placeholder="blank = unknown"></div>
+</div></div>
+
+<div class="card"><h2>3. Prominence: client vs average of top 3 winners</h2><div class="g">
+<div><label>Client total reviews</label><input id="cr" type="number" min="0" placeholder="blank = unknown"></div>
+<div><label>Winners' avg reviews</label><input id="wr" type="number" min="0" placeholder="blank = unknown"></div>
+<div><label>Client reviews last 90 days</label><input id="cv" type="number" min="0" placeholder="blank = unknown"></div>
+<div><label>Winners' avg last 90 days</label><input id="wv" type="number" min="0" placeholder="blank = unknown"></div>
+<div><label>Client rating</label><input id="cs" type="number" step="0.1" min="1" max="5" placeholder="blank = unknown"></div>
+<div><label>Winners' avg rating</label><input id="ws" type="number" step="0.1" min="1" max="5" placeholder="blank = unknown"></div>
+</div></div>
+
+<div class="card"><h2>4. Relevance and trust</h2><div class="g">
+<div><label>Dedicated page for this service</label><select id="sp"><option value="y">Yes, strong</option><option value="t">Thin / weak</option><option value="n">No</option></select></div>
+<div><label>Page for the areas targeted</label><select id="lp"><option value="y">Yes</option><option value="n">No</option></select></div>
+<div><label>Reviews mention the service/keyword</label><select id="rk"><option value="y">Often</option><option value="s">Rarely</option><option value="n">Never</option></select></div>
+<div><label>NAP consistent across citations</label><select id="nap"><option value="y">Yes</option><option value="n">No / unknown</option></select></div>
+<div><label>Duplicate listing / suspension / address issue</label><select id="bad"><option value="n">No</option><option value="y">Yes</option></select></div>
+<div><label>Posts per week</label><input id="po" type="number" min="0" value="3"></div>
+</div></div>
+
+<button onclick="run()">Diagnose</button><button class="sec" onclick="demo()">Load sample</button><button class="sec" onclick="save()">Save snapshot</button>
+
+<div id="out" style="margin-top:18px"><div class="card"><h2 id="ttl"></h2><div id="sum" class="s"></div><div id="res"></div>
+<div id="catout"></div><h2 style="margin-top:14px">Deprioritize for now</h2><div id="skip" class="s"></div></div></div>
+<div class="card"><h2>Saved clients (this browser only)</h2><div id="saved" class="s"></div></div>
+<div class="note">This engine scores inputs with rule-based weights, so treat results as ranked hypotheses. Confidence rises as you log actions and compare before/after scans. Live pulls (GBP API, geo-grid scans, competitor tracking) are the next build.</div>
+</div>
+<script>
+const $=i=>document.getElementById(i),n=i=>parseFloat($(i).value)||0;
+const IDS=['impname','name','kw','pack','cat','cp','cs2','w1','w2','w3','r0','r1','r2','r3','cr','wr','cv','wv','cs','ws','sp','lp','rk','nap','bad','po'],SK='gbp_sniper_v1';
+function st(){try{return JSON.parse(localStorage.getItem(SK)||'{}')}catch(e){return {}}}
+function put(o){try{localStorage.setItem(SK,JSON.stringify(o))}catch(e){}}
+function save(){const k=($('name').value.trim()||'Client')+' | '+($('kw').value.trim()||'keyword'),o=st(),v={};IDS.forEach(i=>v[i]=$(i).value);(o[k]=o[k]||[]).push({d:new Date().toISOString().slice(0,10),v,t:window.lastTop||''});put(o);list()}
+function list(){const el=$('saved'),o=st(),ks=Object.keys(o);el.textContent='';if(!ks.length){el.textContent='Nothing saved yet. Run a diagnosis, then click Save snapshot. Each save adds a dated snapshot, so review growth shows up over time.';return}
+ks.forEach(k=>{const s=o[k],b=s[s.length-1],row=document.createElement('div');row.className='r lo';let t=k+' · '+s.length+' snapshot'+(s.length>1?'s':'')+' · last '+b.d+(b.t?' · top blocker: '+b.t:'');
+if(s.length>1){const a=s[s.length-2],x=a.v.cr,y=b.v.cr;if(x!==''&&y!==''&&x!=null&&y!=null){const df=(+y)-(+x);t+=' · reviews '+(df>=0?'+':'')+df+' since '+a.d}}
+const sp=document.createElement('div');sp.textContent=t;row.appendChild(sp);
+const b1=document.createElement('button');b1.className='sec';b1.style.marginTop='6px';b1.textContent='Load latest';b1.onclick=()=>loadS(k);
+const b2=document.createElement('button');b2.className='sec';b2.style.marginTop='6px';b2.textContent='Delete';b2.onclick=()=>{const q=st();delete q[k];put(q);list()};
+row.appendChild(b1);row.appendChild(b2);el.appendChild(row)})}
+function loadS(k){const s=st()[k];if(!s)return;const v=s[s.length-1].v;IDS.forEach(i=>{if(v[i]!==undefined)$(i).value=v[i]});window.scrollTo({top:0,behavior:'smooth'})}
+list();
+async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';
+const body={keyword:$('lkw').value.trim(),location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim()};
+try{try{localStorage.setItem('gbp_code',$('lcode').value)}catch(e){}
+const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});
+const d=await r.json();if(!r.ok){m.textContent=d.error||'Search failed.';return}
+$('jin').value=JSON.stringify(d);$('impname').value=$('lclient').value.trim();importJSON();
+m.textContent=(d.cached?'Cached result, no charge. ':'Cost $'+d.cost+'. ')+$('imsg').textContent;
+}catch(e){m.textContent='Could not reach the server.'}}
+try{$('lcode').value=localStorage.getItem('gbp_code')||''}catch(e){}
+function findR(o){if(!o||typeof o!=='object')return null;if(Array.isArray(o.items)&&o.items.length&&o.items[0].title!==undefined)return o;for(const k in o){const r=findR(o[k]);if(r)return r}return null}
+function cats(it){return [it.category,...(it.additional_categories||[])].filter(Boolean)}
+function importJSON(){
+const m=$('imsg');let d;
+try{d=JSON.parse($('jin').value)}catch(e){m.textContent='That is not valid JSON. Paste the whole response.';return}
+const r=findR(d);if(!r){m.textContent='No business results found in this JSON.';return}
+const raw=$('impname').value.trim(),nm=raw.toLowerCase();
+const items=r.items.filter(i=>i.title);
+const ci=nm?items.find(i=>{const t=i.title.toLowerCase();return t.includes(nm)||nm.includes(t)}):null;
+const win=items.filter(i=>i!==ci).slice(0,3);
+const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const vc=i=>(i.rating&&i.rating.votes_count)||0,rv=i=>(i.rating&&i.rating.value)||0;
+if(r.keyword)$('kw').value=r.keyword;
+if(raw)$('name').value=raw;
+win.forEach((w,i)=>$('w'+(i+1)).value=cats(w).join(', '));
+$('wr').value=Math.round(avg(win.map(vc)));
+$('ws').value=avg(win.map(rv)).toFixed(1);
+if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=vc(ci);$('cs').value=rv(ci)||4.5}
+const names=win.map(w=>w.title).join(', ');
+m.textContent=ci?`Imported. Client found at rank #${ci.rank_group} for this search. Competitors used: ${names}. Enter that rank in the matching distance zone in section 2, and add last-90-day review counts (not in this data).`:`Imported the top 3 as competitors: ${names}. Client not found in these results, so enter the client's own categories (1b) and reviews (3) by hand. Last-90-day counts are not in this data.`;
+}
+function demo(){const v={cp:'Dental clinic',cs2:'Dentist',w1:'Dentist, Cosmetic dentist, Emergency dental service',w2:'Dentist, Teeth whitening service, Emergency dental service',w3:'Dentist, Cosmetic dentist, Orthodontist',name:'Smile Dental',kw:'dentist near me',pack:'y',cat:'partial',r0:2,r1:6,r2:14,r3:0,cr:48,wr:210,cv:3,wv:22,cs:4.4,ws:4.8,sp:'t',lp:'n',rk:'s',nap:'n',bad:'n',po:3};for(const k in v)$(k).value=v[k]}
+function run(){
+const C=[];const add=(score,type,why,act)=>score>0&&C.push({score:Math.min(score,98),type,why,act});
+const has=id=>$(id).value.trim()!=='',hasTot=has('cr')&&n('wr')>0,hasVel=has('cv')&&n('wv')>0,hasRat=has('cs')&&has('ws');
+const rr=hasTot?n('cr')/n('wr'):1, vr=hasVel?n('cv')/n('wv'):1, rd=hasRat?n('ws')-n('cs'):0;
+const rk=[n('r0'),n('r1'),n('r2'),n('r3')], at=r=>r>0?r:25;
+// Trust
+if($('bad').value==='y')add(95,'Listing integrity issue','A duplicate, suspension or address problem suppresses everything else.','Resolve this first: merge/remove duplicates, verify address, check for suspensions. Pause all other work until fixed.');
+// Category
+const par=s=>s.replace(/centre/gi,'center').split(',').map(x=>x.trim()).filter(Boolean),lc=a=>a.map(x=>x.toLowerCase());
+const W=['w1','w2','w3'].map(i=>par($(i).value)).filter(a=>a.length),cp=$('cp').value.trim().replace(/centre/gi,'center'),cl=[cp,...par($('cs2').value)].filter(Boolean),cll=lc(cl);
+let catHtml='';
+if(W.length&&cp){
+const prim={},all={};
+W.forEach(a=>{const k0=a[0].toLowerCase();prim[k0]=prim[k0]||{n:a[0],c:0};prim[k0].c++;new Set(lc(a)).forEach(k=>{all[k]=all[k]||{n:a.find(x=>x.toLowerCase()===k),c:0};all[k].c++})});
+const tp=Object.values(prim).sort((a,b)=>b.c-a.c)[0],tl=tp.n.toLowerCase(),cpl=cp.toLowerCase();
+const pm=cpl===tl?'match':(all[cpl]?'partial':'no'),need=W.length>1?2:1;
+const miss=Object.keys(all).filter(k=>all[k].c>=need&&!cll.includes(k)&&k!==tl).sort((a,b)=>all[b].c-all[a].c).map(k=>all[k].n);
+if(pm==='no')add(88,'Category mismatch',`Client primary "${cp}" is not used by any winner. Winners' most common primary: "${tp.n}" (${tp.c}/${W.length}). Category is the strongest relevance signal.`,`If it truly describes the business, switch primary to "${tp.n}" and keep "${cp}" as secondary.`);
+else if(pm==='partial')add(55,'Weak category fit',`"${cp}" appears only as a secondary for winners. Their most common primary is "${tp.n}".`,`Test making "${tp.n}" the primary and keep "${cp}" as secondary.`);
+if(!cll.includes(tl)&&pm!=='no'&&false){}
+if(miss.length)add(pm==='match'?42:25,'Missing secondary categories',`Winners use categories the client lacks: ${miss.join(', ')}.`,`Add the ones that genuinely apply: ${miss.slice(0,4).join(', ')}.`);
+const row=(l,a)=>`<div><b>${l}:</b> ${a.map((x,i)=>i?x:'<u>'+x+'</u>').join(', ')}</div>`;
+catHtml='<h2 style="margin-top:14px">Category comparison</h2><div class="s">'+row('Client',cl)+W.map((a,i)=>row('Winner '+(i+1),a)).join('')+(miss.length?`<div style="margin-top:6px"><b>Gap:</b> ${miss.join(', ')}</div>`:'<div style="margin-top:6px">No category gaps found.</div>')+'</div>';
+}else{
+if($('cat').value==='no')add(88,'Category mismatch','Primary category differs from what winners use. Category is the strongest relevance signal.','Change the primary category to match the top 3 winners, then add 2–4 relevant secondary categories.');
+else if($('cat').value==='partial')add(55,'Weak category fit','Category is related but not the one winners use.','Test switching primary to the winners\' category and keep the current one as secondary.');
+}
+// Prominence
+let p=0,pe=[];
+if(rr<.5){p+=45;pe.push(`Total reviews are ${Math.round(rr*100)}% of winners'`)}else if(rr<.8){p+=25;pe.push(`Total reviews are ${Math.round(rr*100)}% of winners'`)}
+if(vr<.5){p+=40;pe.push(`Last-90-day reviews are ${Math.round(vr*100)}% of winners' (low velocity)`)}else if(vr<.8){p+=20;pe.push('Review velocity trails winners')}
+if(rd>=.3){p+=15;pe.push(`Rating is ${rd.toFixed(1)} below winners'`)}
+if(p)add(p,'Prominence gap','Winners out-review the client in volume and recency.\n'+pe.join('; ')+'.',`Run a review request system: target ${Math.max(Math.ceil(n('wv')*1.1),5)} new reviews per 90 days, asking customers to mention the specific service and area.`);
+// Relevance
+let l=0,le=[];
+if($('sp').value==='n'){l+=65;le.push('No dedicated service page')}else if($('sp').value==='t'){l+=40;le.push('Service page is thin')}
+if($('lp').value==='n'){l+=25;le.push('No page for targeted areas')}
+if($('rk').value==='n'){l+=15;le.push('Reviews never mention the service')}else if($('rk').value==='s')l+=7;
+if(l)add(l,'Relevance gap (website)','Google has little on-site proof of this service/area.\n'+le.join('; ')+'.','Build or expand a dedicated service page (800+ words, FAQs, local proof, internal links) and link it from the GBP website field and service listings.');
+// Distance
+const rkn=[0,1,2,3].map(i=>has('r'+i)),near=at(rk[0]),fk=[2,3].filter(i=>rkn[i]),far=fk.length?Math.max(...fk.map(i=>at(rk[i]))):0;
+if(rkn[0]&&fk.length&&near<=3&&far>10)add(rr<.8?35:62,'Distance decay','Strong at the business, vanishes further out. Typical when prominence is only enough for proximity.',rr<.8?'Fix prominence first; it extends reach more than any local content.':'Add area pages and earn local links/citations in the weak zones. Accept some distance limits.');
+if(rkn[0]&&near>10)add(50,'Weak even at home','Not ranking near the business signals a fundamental issue, not a distance one.','Check category, suspension filters and keyword choice before anything else.');
+// Keyword
+if($('pack').value==='n')add(60,'Wrong keyword target','If the keyword doesn\'t trigger a local pack, no GBP work will rank it.','Re-pick keywords that show a local pack; validate by searching from the client\'s location.');
+// NAP
+if($('nap').value==='n')add(40,'Citation/NAP inconsistency','Inconsistent or unverified NAP weakens trust and prominence.','Audit top 30 citations, fix mismatches, and remove duplicates.');
+C.sort((a,b)=>b.score-a.score);
+const top=C.slice(0,3),conf=s=>s>=75?['hi','High']:s>=50?['md','Medium']:['lo','Low'];
+$('out').style.display='block';
+$('ttl').textContent=`${$('name').value||'Client'}: "${$('kw').value||'keyword'}"`;
+$('sum').textContent=top.length?`Primary blocker: ${top[0].type}. Fix in order; re-scan 2–3 weeks after each change so you can attribute impact.`:'No strong blockers detected from the data entered. Check that inputs are accurate, or compare against more competitors.';
+$('res').innerHTML=top.map((c,i)=>{const [k,t]=conf(c.score);return `<div class="r ${k}"><span class="tag ${k}">#${i+1} · ${t} confidence · score ${c.score}</span><div><b>${c.type}</b></div><div>${c.why.replace(/\n/g,'<br>')}</div><div class="act">→ ${c.act}</div></div>`}).join('');
+$('catout').innerHTML=catHtml;window.lastTop=top.length?top[0].type:'';const mi=[];if(!hasTot)mi.push('total reviews');if(!hasVel)mi.push('last-90-day review velocity');if(!hasRat)mi.push('ratings');if(!(rkn[0]&&(rkn[2]||rkn[3])))mi.push('rank by distance');if(mi.length)$('sum').textContent+=' Not assessed (no data entered): '+mi.join(', ')+'. Treat this as a partial diagnosis.';const po=n('po');
+$('skip').innerHTML=`<b>Posting frequency (${po}/week):</b> low confidence as a ranking lever. Keep it for conversions and engagement, but don't add more until the blockers above are addressed.`+(C.slice(3).length?'<br><b>Lower-ranked:</b> '+C.slice(3).map(c=>c.type).join(', ')+'.':'');
+$('out').scrollIntoView({behavior:'smooth'});
+}
+</script></body></html>
