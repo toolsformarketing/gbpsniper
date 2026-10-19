@@ -41,6 +41,28 @@ function codeOk(given) {
   return crypto.timingSafeEqual(h(given), h(ACCESS_CODE));
 }
 
+const COUNTRY = (process.env.DEFAULT_COUNTRY_CODE || 'IN').toLowerCase();
+const authHeader = () => 'Basic ' + Buffer.from(`${DFS_LOGIN}:${DFS_PASSWORD}`).toString('base64');
+
+// City lookup: DataForSEO's own location list for the country, loaded once per server start.
+let locList = null;
+async function loadLocations() {
+  if (locList) return locList;
+  const r = await fetch(`https://api.dataforseo.com/v3/serp/google/locations/${COUNTRY}`, { headers: { Authorization: authHeader() } });
+  const j = await r.json();
+  const t = j.tasks && j.tasks[0];
+  if (!r.ok || !t || t.status_code !== 20000 || !Array.isArray(t.result)) throw new Error('location list unavailable');
+  locList = t.result.map(x => ({ code: x.location_code, name: x.location_name, type: x.location_type }));
+  return locList;
+}
+async function resolveCity(city) {
+  const list = await loadLocations();
+  const c = city.toLowerCase();
+  const m = list.filter(x => x.name.split(',')[0].trim().toLowerCase() === c);
+  const cities = m.filter(x => x.type === 'City');
+  return cities.length ? cities : m;
+}
+
 app.get('/health', (_req, res) => res.json({ ok: true, configured: { DFS_LOGIN: !!DFS_LOGIN, DFS_PASSWORD: !!DFS_PASSWORD, ACCESS_CODE: !!ACCESS_CODE } }));
 
 app.post('/api/search', async (req, res) => {
@@ -52,31 +74,39 @@ app.post('/api/search', async (req, res) => {
     return res.status(401).json({ error: 'Wrong access code.' });
 
   const keyword = String(req.body.keyword || '').trim().slice(0, 100);
-  const location = String(req.body.location || '').trim().slice(0, 100);
+  const location = String(req.body.location || '').split(',').map(s => s.trim()).filter(Boolean).join(',').slice(0, 100);
   const coordinate = String(req.body.coordinate || '').trim();
   if (!keyword || (!location && !coordinate))
     return res.status(400).json({ error: 'Enter a keyword and a location (or coordinates).' });
   if (coordinate && !/^-?\d{1,2}(\.\d+)?,-?\d{1,3}(\.\d+)?(,\d{1,2}z)?$/.test(coordinate))
     return res.status(400).json({ error: 'Coordinates must look like 9.9252,78.1198,17z' });
 
-  const key = [keyword, location, coordinate].join('|').toLowerCase();
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.t < CACHE_MS) return res.json({ ...hit.data, cached: true });
-
-  roll();
-  if (spent >= DAILY_SPEND_CAP)
-    return res.status(429).json({ error: 'Daily spend cap reached. Try again tomorrow or raise DAILY_SPEND_CAP_USD.' });
-
   try {
     const task = { keyword, language_code: 'en', device: DEVICE, depth: DEPTH, search_this_area: true, search_places: true };
-    if (coordinate) task.location_coordinate = coordinate; else task.location_name = location;
+    let where = coordinate;
+    if (coordinate) task.location_coordinate = coordinate;
+    else if (location.includes(',')) { task.location_name = location; where = location; }
+    else {
+      const m = await resolveCity(location);
+      if (!m.length) return res.status(400).json({ error: `No city called "${location}" found for country ${COUNTRY.toUpperCase()}. Check the spelling, or use coordinates.` });
+      if (m.length > 1) {
+        const names = m.slice(0, 8).map(x => x.name);
+        return res.status(409).json({ error: 'Several places match: ' + names.join(' | ') + '. Type one in full (City,State,Country).' });
+      }
+      task.location_code = m[0].code; where = m[0].name;
+    }
+
+    const key = [keyword, where].join('|').toLowerCase();
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.t < CACHE_MS) return res.json({ ...hit.data, cached: true });
+
+    roll();
+    if (spent >= DAILY_SPEND_CAP)
+      return res.status(429).json({ error: 'Daily spend cap reached. Try again tomorrow or raise DAILY_SPEND_CAP_USD.' });
 
     const r = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: {
-        Authorization: 'Basic ' + Buffer.from(`${DFS_LOGIN}:${DFS_PASSWORD}`).toString('base64'),
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify([task]),
     });
     const j = await r.json();
@@ -102,9 +132,9 @@ app.post('/api/search', async (req, res) => {
       longitude: i.longitude,
       is_claimed: i.is_claimed,
     }));
-    const data = { keyword, location, coordinate, cost, items };
+    const data = { keyword, location: where, coordinate, cost, items };
     cacheSet(key, data);
-    console.log(`[search] "${keyword}" @ ${coordinate || location} cost=$${cost} spentToday=$${spent.toFixed(4)}`);
+    console.log(`[search] "${keyword}" @ ${where} cost=$${cost} spentToday=$${spent.toFixed(4)}`);
     res.json(data);
   } catch (e) {
     console.error('[search] failed', e.message);
