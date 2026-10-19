@@ -96,14 +96,21 @@ const b2=document.createElement('button');b2.className='sec';b2.style.marginTop=
 row.appendChild(b1);row.appendChild(b2);el.appendChild(row)})}
 function loadS(k){const s=st()[k];if(!s)return;const v=s[s.length-1].v;IDS.forEach(i=>{if(v[i]!==undefined)$(i).value=v[i]});window.scrollTo({top:0,behavior:'smooth'})}
 list();
+async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';
-const body={keyword:$('lkw').value.trim(),location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim()};
+const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim()},cn=$('lclient').value.trim();
 try{try{localStorage.setItem('gbp_code',$('lcode').value)}catch(e){}
-const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});
-const d=await r.json();if(!r.ok){m.textContent=d.error||'Search failed.';return}
-$('jin').value=JSON.stringify(d);$('impname').value=$('lclient').value.trim();importJSON();
-m.textContent=(d.cached?'Cached result, no charge. ':'Cost $'+d.cost+'. ')+$('imsg').textContent;
-}catch(e){m.textContent='Could not reach the server.'}}
+const d=await call({keyword:$('lkw').value.trim(),...loc});
+$('jin').value=JSON.stringify(d);$('impname').value=cn;importJSON();
+let cost=d.cached?0:d.cost,note=$('imsg').textContent;
+if(cn&&note.indexOf('Client not found')>=0){
+const d2=await call({keyword:cn,...loc});cost+=d2.cached?0:d2.cost;
+const nm=cn.toLowerCase(),ci=d2.items.find(i=>{const t=i.title.toLowerCase();return t.includes(nm)||nm.includes(t)});
+if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';$('name').value=cn;
+note='Competitors imported. The client is not in the top results for this keyword, so its own profile was fetched by name (categories, reviews, rating). Enter 0 for rank in the distance zone that matches this search. Last-90-day counts are not in this data.'}
+else note+=' The client could not be found by name either. Check the spelling exactly as on Google Maps.'}
+m.textContent='Cost $'+cost.toFixed(4)+'. '+note;
+}catch(e){m.textContent=e.message||'Could not reach the server.'}}
 try{$('lcode').value=localStorage.getItem('gbp_code')||''}catch(e){}
 function findR(o){if(!o||typeof o!=='object')return null;if(Array.isArray(o.items)&&o.items.length&&o.items[0].title!==undefined)return o;for(const k in o){const r=findR(o[k]);if(r)return r}return null}
 function cats(it){return [it.category,...(it.additional_categories||[])].filter(Boolean)}
