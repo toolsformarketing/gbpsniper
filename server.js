@@ -41,7 +41,7 @@ function codeOk(given) {
   return crypto.timingSafeEqual(h(given), h(ACCESS_CODE));
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true, configured: { DFS_LOGIN: !!DFS_LOGIN, DFS_PASSWORD: !!DFS_PASSWORD, ACCESS_CODE: !!ACCESS_CODE } }));
 
 app.post('/api/search', async (req, res) => {
   if (!DFS_LOGIN || !DFS_PASSWORD || !ACCESS_CODE)
