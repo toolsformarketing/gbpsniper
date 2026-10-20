@@ -47,7 +47,7 @@ ul{margin:6px 0 0 18px;padding:0}
 <script>
 const $=i=>document.getElementById(i);
 const esc=x=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim().replace(/(^|\s)(\p{L})\s(?=\p{L}(\s|$))/gu,'$1$2');
 function nmatch(a,b){a=nz(a);b=nz(b);if(!a||!b)return false;if(a.includes(b)||b.includes(a))return true;const A=a.split(' '),B=b.split(' '),sm=A.length<=B.length?A:B,bg=A.length<=B.length?B:A;return sm.length>=3&&sm.filter(w=>bg.includes(w)).length/sm.length>=0.75}
 const cn=s=>String(s||'').toLowerCase().replace(/centre/g,'center').trim();
 const med=a=>{a=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);if(!a.length)return 0;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2};
@@ -86,12 +86,14 @@ async function analyse(client,loc){
 const kw=$('kw').value.trim()||client.category;
 if(!kw){$('msg').textContent='This business has no category, so enter a main keyword and try again.';return}
 $('msg').textContent='Analysing competitors for "'+kw+'"...';
-const d=await call({keyword:kw,...loc});
+let d=await call({keyword:kw,...loc});
+if(d.items.filter(i=>i.place_id!==client.place_id).length<3&&loc.coordinate){$('msg').textContent='Few results nearby, widening the search area...';const d2=await call({keyword:kw,...loc,coordinate:wider(loc.coordinate)});if(d2.items.length>d.items.length)d=d2}
 $('msg').textContent='';render(client,d,kw,loc)}
+function wider(c){const p=c.split(',');const z=parseInt((p[2]||'').replace(/z/i,''))||13;return p[0]+','+p[1]+','+Math.max(9,z-3)+'z'}
 
 function render(client,d,kw,loc){
 const comp=d.items.filter(i=>i.place_id!==client.place_id).slice(0,10),n=comp.length,self=d.items.find(i=>i.place_id===client.place_id);
-if(!n){$('rep').innerHTML='<div class="card">No competitors were returned for this keyword and city.</div>';return}
+if(!n){$('rep').innerHTML='<div class="card"><b>No competitors were returned for "'+esc(kw)+'".</b><div class="note">Try a broader keyword (for example the plain service, such as "car rental"), a wider area (add a lower zoom to the coordinates, such as ,11z), or use just the city without coordinates.</div></div>';return}
 const B={rev:med(comp.map(votes)),rat:med(comp.map(stars)),ph:med(comp.map(i=>i.total_photos||0)),sec:med(comp.map(i=>(i.additional_categories||[]).length)),web:comp.filter(i=>i.domain).length};
 const cv=votes(client),cs=stars(client),cp=client.total_photos||0,mine=new Set(cats(client).map(cn));
 const pc={};comp.forEach(i=>{const k=cn(i.category);if(k){pc[k]=pc[k]||{n:i.category,c:0};pc[k].c++}});
