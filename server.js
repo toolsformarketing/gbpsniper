@@ -41,24 +41,30 @@ function codeOk(given) {
   return crypto.timingSafeEqual(h(given), h(ACCESS_CODE));
 }
 
-const COUNTRY = (process.env.DEFAULT_COUNTRY_CODE || 'IN').toLowerCase();
+const DEFAULT_COUNTRY = (process.env.DEFAULT_COUNTRY_CODE || 'IN').toLowerCase();
+const LANGUAGE = process.env.DEFAULT_LANGUAGE || 'en';
 const authHeader = () => 'Basic ' + Buffer.from(`${DFS_LOGIN}:${DFS_PASSWORD}`).toString('base64');
 
-// City lookup: DataForSEO's own location list for the country, loaded once per server start.
-let locList = null;
-async function loadLocations() {
-  if (locList) return locList;
-  const r = await fetch(`https://api.dataforseo.com/v3/serp/google/locations/${COUNTRY}`, { headers: { Authorization: authHeader() } });
+// Location lists come from DataForSEO, one per country, loaded on first use.
+const locCache = new Map();
+async function loadLocations(country) {
+  if (locCache.has(country)) return locCache.get(country);
+  const r = await fetch(`https://api.dataforseo.com/v3/serp/google/locations/${country}`, { headers: { Authorization: authHeader() } });
   const j = await r.json();
   const t = j.tasks && j.tasks[0];
   if (!r.ok || !t || t.status_code !== 20000 || !Array.isArray(t.result)) throw new Error('location list unavailable');
-  locList = t.result.map(x => ({ code: x.location_code, name: x.location_name, type: x.location_type }));
-  return locList;
+  const list = t.result.map(x => ({ code: x.location_code, name: x.location_name, type: x.location_type }));
+  locCache.set(country, list);
+  return list;
 }
-async function resolveCity(city) {
-  const list = await loadLocations();
-  const c = city.toLowerCase();
-  const m = list.filter(x => x.name.split(',')[0].trim().toLowerCase() === c);
+// "Madurai", "Springfield,Missouri" or "Madurai,India" all work: every part must be a segment of the full name.
+async function resolveLocation(text, country) {
+  const list = await loadLocations(country);
+  const q = text.toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+  const m = list.filter(x => {
+    const segs = x.name.toLowerCase().split(',').map(y => y.trim());
+    return segs[0] === q[0] && q.every(p => segs.includes(p));
+  });
   const cities = m.filter(x => x.type === 'City');
   return cities.length ? cities : m;
 }
@@ -76,22 +82,25 @@ app.post('/api/search', async (req, res) => {
   const keyword = String(req.body.keyword || '').trim().slice(0, 100);
   const location = String(req.body.location || '').split(',').map(s => s.trim()).filter(Boolean).join(',').slice(0, 100);
   const coordinate = String(req.body.coordinate || '').trim();
+  const rawCountry = String(req.body.country || '').trim();
+  if (rawCountry && !/^[A-Za-z]{2}$/.test(rawCountry))
+    return res.status(400).json({ error: 'Country must be a 2-letter code such as US, GB, IN, AE.' });
+  const country = (rawCountry || DEFAULT_COUNTRY).toLowerCase();
   if (!keyword || (!location && !coordinate))
     return res.status(400).json({ error: 'Enter a keyword and a location (or coordinates).' });
   if (coordinate && !/^-?\d{1,2}(\.\d+)?,-?\d{1,3}(\.\d+)?(,\d{1,2}z)?$/.test(coordinate))
     return res.status(400).json({ error: 'Coordinates must look like 9.9252,78.1198,17z' });
 
   try {
-    const task = { keyword, language_code: 'en', device: DEVICE, depth: DEPTH, search_this_area: true, search_places: true };
+    const task = { keyword, language_code: LANGUAGE, device: DEVICE, depth: DEPTH, search_this_area: true, search_places: true };
     let where = coordinate;
     if (coordinate) task.location_coordinate = coordinate;
-    else if (location.includes(',')) { task.location_name = location; where = location; }
     else {
-      const m = await resolveCity(location);
-      if (!m.length) return res.status(400).json({ error: `No city called "${location}" found for country ${COUNTRY.toUpperCase()}. Check the spelling, or use coordinates.` });
+      const m = await resolveLocation(location, country);
+      if (!m.length) return res.status(400).json({ error: `No place matching "${location}" found for country ${country.toUpperCase()}. Check the spelling and the country code, or use coordinates.` });
       if (m.length > 1) {
         const names = m.slice(0, 8).map(x => x.name);
-        return res.status(409).json({ error: 'Several places match: ' + names.join(' | ') + '. Type one in full (City,State,Country).' });
+        return res.status(409).json({ error: 'Several places match: ' + names.join(' | ') + '. Type one in full (City,Region,Country).' });
       }
       task.location_code = m[0].code; where = m[0].name;
     }
