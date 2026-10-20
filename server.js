@@ -93,8 +93,9 @@ app.post('/api/search', async (req, res) => {
 
   try {
     const task = { keyword, language_code: LANGUAGE, device: DEVICE, depth: DEPTH, search_this_area: true, search_places: true };
-    let where = coordinate;
-    if (coordinate) task.location_coordinate = coordinate;
+    const coord = coordinate && !/z$/i.test(coordinate) ? coordinate + ',13z' : coordinate; // default to a city-sized area
+    let where = coord;
+    if (coord) task.location_coordinate = coord;
     else {
       const m = await resolveLocation(location, country);
       if (!m.length) return res.status(400).json({ error: `No place matching "${location}" found for country ${country.toUpperCase()}. Check the spelling and the country code, or use coordinates.` });
