@@ -49,11 +49,11 @@ const authHeader = () => 'Basic ' + Buffer.from(`${DFS_LOGIN}:${DFS_PASSWORD}`).
 const locCache = new Map();
 async function loadLocations(country) {
   if (locCache.has(country)) return locCache.get(country);
-  const r = await fetch(`https://api.dataforseo.com/v3/serp/google/locations/${country}`, { headers: { Authorization: authHeader() } });
+  const r = await fetch(`https://api.dataforseo.com/v3/serp/google/locations/${country}`, { headers: { Authorization: authHeader() }, signal: AbortSignal.timeout(60000) });
   const j = await r.json();
   const t = j.tasks && j.tasks[0];
   if (!r.ok || !t || t.status_code !== 20000 || !Array.isArray(t.result)) throw new Error('location list unavailable');
-  const list = t.result.map(x => ({ code: x.location_code, name: x.location_name, type: x.location_type }));
+  const list = t.result.filter(x => x && typeof x.location_name === 'string').map(x => ({ code: x.location_code, name: x.location_name, type: x.location_type }));
   locCache.set(country, list);
   return list;
 }
@@ -117,6 +117,7 @@ app.post('/api/search', async (req, res) => {
       method: 'POST',
       headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
       body: JSON.stringify([task]),
+      signal: AbortSignal.timeout(60000),
     });
     const j = await r.json();
     const cost = Number(j.cost) || 0;
@@ -146,8 +147,8 @@ app.post('/api/search', async (req, res) => {
     console.log(`[search] "${keyword}" @ ${where} cost=$${cost} spentToday=$${spent.toFixed(4)}`);
     res.json(data);
   } catch (e) {
-    console.error('[search] failed', e.message);
-    res.status(502).json({ error: 'Could not reach the data provider.' });
+    console.error('[search] failed', e);
+    res.status(502).json({ error: 'Could not reach the data provider (' + ((e && e.message) || 'unknown') + ').' });
   }
 });
 
