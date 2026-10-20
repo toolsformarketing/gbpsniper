@@ -35,6 +35,7 @@ ul{margin:6px 0 0 18px;padding:0}
 <div><label>Access code</label><input id="code" type="password" autocomplete="off"></div>
 <div><label>Business name (as on Google Maps)</label><input id="bn"></div>
 <div><label>City</label><input id="city" placeholder="Maple Ridge"></div>
+<div><label>Or coordinates lat,lng,zoom (optional)</label><input id="coord" placeholder="49.1044,-122.6608,14z"></div>
 <div><label>Country (2-letter code)</label><input id="cc" maxlength="2" placeholder="CA" style="text-transform:uppercase"></div>
 <div><label>Main keyword (optional)</label><input id="kw" placeholder="defaults to the business category"></div>
 </div>
@@ -56,16 +57,27 @@ try{$('code').value=localStorage.getItem('gbp_code')||'';$('cc').value=localStor
 
 async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 
+function simList(items,name){const seen=new Set(),tf={};items.forEach(i=>new Set(nz(i.title).split(' ')).forEach(w=>tf[w]=(tf[w]||0)+1));
+const gen=new Set(Object.keys(tf).filter(w=>tf[w]>=items.length*0.4));
+const q=new Set(nz(name).split(' ').filter(w=>w.length>2&&!gen.has(w)));
+return items.filter(i=>!seen.has(i.place_id)&&seen.add(i.place_id)).map(i=>({i,s:nz(i.title).split(' ').filter(w=>q.has(w)).length})).filter(x=>x.s>=Math.max(1,Math.ceil(q.size*0.5))).sort((a,b)=>b.s-a.s).map(x=>x.i)}
+
 async function build(){
-const m=$('msg'),name=$('bn').value.trim(),loc={location:$('city').value.trim(),country:$('cc').value.trim()};
+const m=$('msg'),name=$('bn').value.trim(),loc={location:$('city').value.trim(),coordinate:$('coord').value.trim(),country:$('cc').value.trim()};
 $('pick').textContent='';$('rep').textContent='';
-if(!name||!loc.location){m.textContent='Enter the business name and the city.';return}
+if(!name||(!loc.location&&!loc.coordinate)){m.textContent='Enter the business name and the city (or coordinates).';return}
 try{localStorage.setItem('gbp_code',$('code').value);localStorage.setItem('gbp_cc',$('cc').value)}catch(e){}
 m.textContent='Finding the business...';
-try{const d=await call({keyword:name,...loc});
-const ms=d.items.filter(i=>nmatch(i.title,name));
-if(ms.length===1){await analyse(ms[0],loc)}
-else{m.textContent=ms.length?'Several businesses match. Choose yours:':'No exact match for that name. Closest results, choose yours if it is listed:';showPick((ms.length?ms:d.items).slice(0,5),loc)}
+try{
+const d=await call({keyword:name,...loc}),ms=d.items.filter(i=>nmatch(i.title,name));
+if(ms.length===1){await analyse(ms[0],loc);return}
+if(ms.length>1){m.textContent='Several businesses match. Choose yours:';showPick(ms.slice(0,5),loc);return}
+const sh=nz(name).split(' ').slice(0,3).join(' ');let all=d.items;
+if(sh&&sh!==nz(name)){m.textContent='Trying a shorter name...';const d2=await call({keyword:sh,...loc}),m2=d2.items.filter(i=>nmatch(i.title,sh));
+if(m2.length){m.textContent='Found using a shorter name. Confirm it is your client:';showPick(m2.slice(0,5),loc);return}all=all.concat(d2.items)}
+const sims=simList(all,name);
+if(sims.length){m.textContent='No exact match. These have a similar name; choose yours if it is listed:';showPick(sims.slice(0,5),loc)}
+else m.textContent='Could not find "'+name+'" in '+(loc.location||'that area')+'. The search returned other businesses, but none with a similar name. Check the name exactly as on Google Maps, try a nearby city, or enter the business coordinates.';
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
 
 function showPick(list,loc){const el=$('pick');el.textContent='';list.forEach(ci=>{const row=document.createElement('div');row.className='r Low';const d=document.createElement('div');d.textContent=ci.title+' \u00b7 '+(ci.category||'no category')+' \u00b7 '+votes(ci)+' reviews \u00b7 '+(ci.address||'');row.appendChild(d);const b=document.createElement('button');b.className='sec';b.style.marginTop='6px';b.textContent='This is my client';b.onclick=()=>{el.textContent='';analyse(ci,loc).catch(e=>{$('msg').textContent=e.message})};row.appendChild(b);el.appendChild(row)})}
@@ -101,7 +113,7 @@ if(!client.domain&&B.web>=Math.ceil(n*0.5))add('Medium','Data','No website liste
 add('Low','Best practice','Posts: start simple','Competitor posting is not measured in this version (planned for Phase 2). Posts mainly help engagement and conversions, not rankings. A reasonable start is 1 to 2 posts a week using the calendar below.');
 const ord={High:0,Medium:1,Low:2};F.sort((a,b)=>ord[a.pri]-ord[b.pri]);
 
-const yes='\u2713',no='\u2013',city=esc(loc.location),cat=esc(client.category||'your service');
+const yes='\u2713',no='\u2013',city=esc(loc.location||'this area'),cat=esc(client.category||'your service');
 let h='';
 h+=`<div class="card"><h2>${esc(client.title)}</h2><div class="s">${esc(client.address||'')}</div><div class="kv">
 <div><b>${esc(client.category||'None')}</b><span>Primary category</span></div><div><b>${(client.additional_categories||[]).length}</b><span>Secondary categories</span></div>
@@ -132,7 +144,7 @@ h+=`<div class="card"><h2>4-week post calendar <span class="pill">Best practice<
 <div class="note">Post once or twice a week on the same days, with a clear call to action such as call, book or visit. Competitor posting cadence will be measured in Phase 2.</div></div>`;
 
 h+=`<div class="noprint"><button onclick="window.print()">Print or save as PDF</button><button class="sec" onclick="copySum()">Copy summary</button></div>`;
-$('rep').innerHTML=h;window.lastSummary=client.title+' ('+loc.location+')\n'+F.map(f=>`[${f.pri}] ${f.title}: ${f.body}`).join('\n');
+$('rep').innerHTML=h;window.lastSummary=client.title+' ('+(loc.location||'')+')\n'+F.map(f=>`[${f.pri}] ${f.title}: ${f.body}`).join('\n');
 }
 function copySum(){try{navigator.clipboard.writeText(window.lastSummary||'');$('msg').textContent='Summary copied.'}catch(e){$('msg').textContent='Could not copy. Select the text manually.'}}
 </script></body></html>
