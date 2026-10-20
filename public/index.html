@@ -126,7 +126,7 @@ note='Competitors imported. '+pickClient(d2,cn);$('fmsg').textContent=note;
 m.textContent=note;
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
 try{$('lcode').value=localStorage.getItem('gbp_code')||'';$('lcountry').value=localStorage.getItem('gbp_cc')||''}catch(e){}
-const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim().replace(/(^|\s)(\p{L})\s(?=\p{L}(\s|$))/gu,'$1$2');
 function nmatch(a,b){a=nz(a);b=nz(b);if(!a||!b)return false;if(a.includes(b)||b.includes(a))return true;const A=a.split(' '),B=b.split(' '),sm=A.length<=B.length?A:B,bg=A.length<=B.length?B:A;return sm.length>=3&&sm.filter(w=>bg.includes(w)).length/sm.length>=0.75}
 function findR(o){if(!o||typeof o!=='object')return null;if(Array.isArray(o.items)&&o.items.length&&o.items[0].title!==undefined)return o;for(const k in o){const r=findR(o[k]);if(r)return r}return null}
 function cats(it){return [it.category,...(it.additional_categories||[])].filter(Boolean)}
