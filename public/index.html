@@ -37,7 +37,7 @@ ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
 <div><label>City</label><input id="lloc" placeholder="Madurai"></div>
 <div><label>Or coordinates lat,lng,zoom (optional)</label><input id="lcoord" placeholder="9.9252,78.1198,17z"></div>
 <div><label>Client name as on Maps (optional)</label><input id="lclient"></div></div>
-<div style="margin-top:10px"><button onclick="liveSearch()">Search and fill</button></div><div id="lmsg" class="note"></div></div>
+<div style="margin-top:10px"><button onclick="liveSearch()">Search and fill</button></div><div id="lmsg" class="note"></div><div id="cands"></div></div>
 
 <div class="card"><h2>0. Import from DataForSEO (optional)</h2><div class="g"><div><label>Client name as on Google Maps (blank if not in results)</label><input id="impname" placeholder="e.g. Club19 The GYM"></div></div><label style="margin-top:10px">Paste the JSON response of a Google Maps search</label><textarea id="jin" rows="5" placeholder="Paste JSON here"></textarea><div style="margin-top:10px"><button onclick="importJSON()">Import and fill form</button></div><div id="imsg" class="note"></div></div>
 
@@ -97,8 +97,10 @@ const b2=document.createElement('button');b2.className='sec';b2.style.marginTop=
 row.appendChild(b1);row.appendChild(b2);el.appendChild(row)})}
 function loadS(k){const s=st()[k];if(!s)return;const v=s[s.length-1].v;IDS.forEach(i=>{if(v[i]!==undefined)$(i).value=v[i]});window.scrollTo({top:0,behavior:'smooth'})}
 list();
+function useClient(ci,cn){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';if(cn)$('name').value=cn;$('cands').textContent='';const msg='Client set to: '+ci.title+' ('+(ci.category||'no category')+'). Competitors imported. Enter 0 for rank in the distance zone that matches this search.';$('lmsg').textContent=msg;$('imsg').textContent=msg}
+function showCands(list,cn){const el=$('cands');el.textContent='';list.forEach(ci=>{const row=document.createElement('div');row.className='r lo';const d=document.createElement('div');d.textContent=ci.title+' \u00b7 '+(ci.category||'no category')+' \u00b7 '+((ci.rating&&ci.rating.votes_count)||0)+' reviews \u00b7 '+(ci.address||'');row.appendChild(d);const b=document.createElement('button');b.className='sec';b.style.marginTop='6px';b.textContent='Use this as the client';b.onclick=()=>useClient(ci,cn);row.appendChild(b);el.appendChild(row)})}
 async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
-async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';
+async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';['cp','cs2','cr','cs'].forEach(i=>$(i).value='');$('cands').textContent='';
 const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),country:$('lcountry').value.trim()},cn=$('lclient').value.trim();
 try{try{localStorage.setItem('gbp_code',$('lcode').value);localStorage.setItem('gbp_cc',$('lcountry').value)}catch(e){}
 const d=await call({keyword:$('lkw').value.trim(),...loc});
@@ -106,10 +108,11 @@ $('jin').value=JSON.stringify(d);$('impname').value=cn;importJSON();
 let note=$('imsg').textContent;
 if(cn&&note.indexOf('Client not found')>=0){
 const d2=await call({keyword:cn,...loc});
-const ci=d2.items.find(i=>nmatch(i.title,cn));
-if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';$('name').value=cn;
-$('imsg').textContent=note='Competitors imported. The client is not in the top results for this keyword, so its own profile was fetched by name (categories, reviews, rating). Enter 0 for rank in the distance zone that matches this search. Last-90-day counts are not in this data.'}
-else note+=' The client could not be found by name either. Closest results were: '+d2.items.slice(0,3).map(i=>i.title).join(' | ')+'. If one of these is the client, copy its exact name into the Client name box and search again.'}
+const wc=new Set(['w1','w2','w3'].flatMap(i=>$(i).value.split(',')).map(nz).filter(Boolean));
+const ms=d2.items.filter(i=>nmatch(i.title,cn)),fits=ms.filter(i=>cats(i).some(c=>wc.has(nz(c))));
+if(fits.length===1){useClient(fits[0],cn);note=$('lmsg').textContent}
+else{note='Competitors imported, but the client could not be confirmed automatically'+(ms.length?' ('+ms.length+' business'+(ms.length>1?'es':'')+' with a similar name, but their categories do not match this market or there are several)':' (no business with that name was found)')+'. Pick the right one below if it is listed, or leave the client fields blank and enter them by hand.';showCands((ms.length?ms:d2.items).slice(0,5),cn)}
+}
 m.textContent=note;
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
 try{$('lcode').value=localStorage.getItem('gbp_code')||'';$('lcountry').value=localStorage.getItem('gbp_cc')||''}catch(e){}
