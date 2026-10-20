@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GBP Business Report</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--tx:#1b1b1a;--mut:#6b6b66;--bd:#e2e2dd;--ac:#0f6e56;--hi:#b3261e;--md:#b26a00;--lo:#5a5a55;box-sizing:border-box}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#212120;--tx:#ecebe6;--mut:#a3a29b;--bd:#3a3a37;--ac:#4cc3a0;--hi:#ff8a80;--md:#ffb74d;--lo:#a3a29b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.w{max-width:960px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 10px}
+.s{color:var(--mut);margin:0 0 14px}a{color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+input{width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+button{padding:10px 18px;border-radius:8px;border:0;background:var(--ac);color:var(--bg);font:inherit;font-weight:600;cursor:pointer;margin-right:8px}
+button.sec{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+.t{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:top}th{color:var(--mut);font-weight:600}
+.r{border-left:4px solid var(--bd);padding:10px 12px;margin-bottom:10px;background:var(--bg);border-radius:0 8px 8px 0}
+.r.High{border-color:var(--hi)}.r.Medium{border-color:var(--md)}.r.Low{border-color:var(--lo)}
+.tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--bd);margin-left:6px;color:var(--mut)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kv div b{display:block;font-size:20px}.kv div span{font-size:12px;color:var(--mut)}
+ul{margin:6px 0 0 18px;padding:0}
+@media print{.noprint{display:none}body{background:#fff;color:#000}.card{break-inside:avoid}}
+</style></head><body><div class="w">
+<h1>Business report</h1>
+<p class="s noprint">Enter a business and city. The tool finds it, finds the real competitors, compares categories, reviews and photos, and builds a plan. <a href="/">Back to the diagnosis tool</a></p>
+
+<div class="card noprint"><div class="g">
+<div><label>Access code</label><input id="code" type="password" autocomplete="off"></div>
+<div><label>Business name (as on Google Maps)</label><input id="bn"></div>
+<div><label>City</label><input id="city" placeholder="Maple Ridge"></div>
+<div><label>Country (2-letter code)</label><input id="cc" maxlength="2" placeholder="CA" style="text-transform:uppercase"></div>
+<div><label>Main keyword (optional)</label><input id="kw" placeholder="defaults to the business category"></div>
+</div>
+<div style="margin-top:10px"><button onclick="build()">Build report</button></div>
+<div id="msg" class="note"></div><div id="pick"></div></div>
+
+<div id="rep"></div>
+</div>
+<script>
+const $=i=>document.getElementById(i);
+const esc=x=>String(x==null?'':x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+function nmatch(a,b){a=nz(a);b=nz(b);if(!a||!b)return false;if(a.includes(b)||b.includes(a))return true;const A=a.split(' '),B=b.split(' '),sm=A.length<=B.length?A:B,bg=A.length<=B.length?B:A;return sm.length>=3&&sm.filter(w=>bg.includes(w)).length/sm.length>=0.75}
+const cn=s=>String(s||'').toLowerCase().replace(/centre/g,'center').trim();
+const med=a=>{a=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);if(!a.length)return 0;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2};
+const votes=i=>(i.rating&&i.rating.votes_count)||0,stars=i=>(i.rating&&i.rating.value)||0;
+const cats=i=>[i.category,...(i.additional_categories||[])].filter(Boolean);
+try{$('code').value=localStorage.getItem('gbp_code')||'';$('cc').value=localStorage.getItem('gbp_cc')||''}catch(e){}
+
+async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
+
+async function build(){
+const m=$('msg'),name=$('bn').value.trim(),loc={location:$('city').value.trim(),country:$('cc').value.trim()};
+$('pick').textContent='';$('rep').textContent='';
+if(!name||!loc.location){m.textContent='Enter the business name and the city.';return}
+try{localStorage.setItem('gbp_code',$('code').value);localStorage.setItem('gbp_cc',$('cc').value)}catch(e){}
+m.textContent='Finding the business...';
+try{const d=await call({keyword:name,...loc});
+const ms=d.items.filter(i=>nmatch(i.title,name));
+if(ms.length===1){await analyse(ms[0],loc)}
+else{m.textContent=ms.length?'Several businesses match. Choose yours:':'No exact match for that name. Closest results, choose yours if it is listed:';showPick((ms.length?ms:d.items).slice(0,5),loc)}
+}catch(e){m.textContent=e.message||'Could not reach the server.'}}
+
+function showPick(list,loc){const el=$('pick');el.textContent='';list.forEach(ci=>{const row=document.createElement('div');row.className='r Low';const d=document.createElement('div');d.textContent=ci.title+' \u00b7 '+(ci.category||'no category')+' \u00b7 '+votes(ci)+' reviews \u00b7 '+(ci.address||'');row.appendChild(d);const b=document.createElement('button');b.className='sec';b.style.marginTop='6px';b.textContent='This is my client';b.onclick=()=>{el.textContent='';analyse(ci,loc).catch(e=>{$('msg').textContent=e.message})};row.appendChild(b);el.appendChild(row)})}
+
+async function analyse(client,loc){
+const kw=$('kw').value.trim()||client.category;
+if(!kw){$('msg').textContent='This business has no category, so enter a main keyword and try again.';return}
+$('msg').textContent='Analysing competitors for "'+kw+'"...';
+const d=await call({keyword:kw,...loc});
+$('msg').textContent='';render(client,d,kw,loc)}
+
+function render(client,d,kw,loc){
+const comp=d.items.filter(i=>i.place_id!==client.place_id).slice(0,10),n=comp.length,self=d.items.find(i=>i.place_id===client.place_id);
+if(!n){$('rep').innerHTML='<div class="card">No competitors were returned for this keyword and city.</div>';return}
+const B={rev:med(comp.map(votes)),rat:med(comp.map(stars)),ph:med(comp.map(i=>i.total_photos||0)),sec:med(comp.map(i=>(i.additional_categories||[]).length)),web:comp.filter(i=>i.domain).length};
+const cv=votes(client),cs=stars(client),cp=client.total_photos||0,mine=new Set(cats(client).map(cn));
+const pc={};comp.forEach(i=>{const k=cn(i.category);if(k){pc[k]=pc[k]||{n:i.category,c:0};pc[k].c++}});
+const top=Object.values(pc).sort((a,b)=>b.c-a.c)[0];
+const fq={};comp.forEach(i=>{const cl=cats(i);new Set(cl.map(cn)).forEach(k=>{fq[k]=fq[k]||{n:cl.find(x=>cn(x)===k),c:0};fq[k].c++})});
+const thr=Math.max(2,Math.ceil(n*0.4));
+const list=Object.entries(fq).map(([k,v])=>({k,n:v.n,c:v.c,has:mine.has(k)})).sort((a,b)=>b.c-a.c).slice(0,12);
+const miss=list.filter(x=>!x.has&&x.c>=thr);
+const F=[];const add=(pri,tag,title,body)=>F.push({pri,tag,title,body});
+if(client.is_claimed===false)add('High','Data','Listing is not claimed','Claim and verify the profile first. Nothing else matters until the business controls it.');
+if(top&&cn(client.category)!==cn(top.n)&&top.c>=thr)add('High','Data','Primary category differs from the market',`${top.c} of ${n} competitors use "${top.n}" as their primary category. The client uses "${client.category||'none'}". Switch only if "${top.n}" truly describes the business, and keep the current one as a secondary.`);
+if(miss.length)add('High','Data','Missing secondary categories',`Used by many competitors but not by the client: ${miss.slice(0,6).map(x=>`${x.n} (${x.c}/${n})`).join(', ')}. Add the ones that genuinely apply.`);
+if(cv<B.rev*0.8){const gap=Math.ceil(B.rev-cv),pm=Math.max(1,Math.ceil(gap/6));add(cv<B.rev*0.5?'High':'Medium','Data','Review volume is below competitors',`Competitor median is ${B.rev} reviews and the client has ${cv}. Closing a gap of ${gap} in about 6 months means roughly ${pm} new reviews a month. Ask every happy customer, and have the request mention the service and area.`)}
+else add('Low','Data','Review volume is at or above the competitor median',`Client ${cv} vs median ${B.rev}. Keep new reviews coming steadily. Review dates (velocity) are not measured in this version.`);
+if(cs&&cs<B.rat-0.2)add('Medium','Data','Rating is below competitors',`Client ${cs} vs median ${B.rat}. Reply to every review, fix recurring complaints, and ask satisfied customers to review.`);
+let tgt=Math.max(Math.ceil(B.ph*1.1),cp);
+if(cp<B.ph*0.8){const pw=Math.max(2,Math.ceil((tgt-cp)/8));add('Medium','Data','Fewer photos than competitors',`Competitor median is ${B.ph} photos and the client has ${cp}. Aim for about ${tgt}: roughly ${pw} new photos a week for 8 weeks, not all at once. See the shot list below.`)}
+if(!client.domain&&B.web>=Math.ceil(n*0.5))add('Medium','Data','No website listed',`${B.web} of ${n} competitors list a website and the client does not. Add one, ideally with a page for the main service.`);
+add('Low','Best practice','Posts: start simple','Competitor posting is not measured in this version (planned for Phase 2). Posts mainly help engagement and conversions, not rankings. A reasonable start is 1 to 2 posts a week using the calendar below.');
+const ord={High:0,Medium:1,Low:2};F.sort((a,b)=>ord[a.pri]-ord[b.pri]);
+
+const yes='\u2713',no='\u2013',city=esc(loc.location),cat=esc(client.category||'your service');
+let h='';
+h+=`<div class="card"><h2>${esc(client.title)}</h2><div class="s">${esc(client.address||'')}</div><div class="kv">
+<div><b>${esc(client.category||'None')}</b><span>Primary category</span></div><div><b>${(client.additional_categories||[]).length}</b><span>Secondary categories</span></div>
+<div><b>${cv}</b><span>Reviews</span></div><div><b>${cs||'-'}</b><span>Rating</span></div><div><b>${cp}</b><span>Photos</span></div>
+<div><b>${client.domain?yes:no}</b><span>Website</span></div><div><b>${self?'#'+self.rank_group:'Not in top '+d.items.length}</b><span>Rank for "${esc(kw)}"</span></div></div>
+<div class="note">If this is not your client, search again with the exact Google Maps name.</div></div>`;
+
+h+=`<div class="card"><h2>What to do, in priority order</h2>${F.map(f=>`<div class="r ${f.pri}"><span class="tag">${f.pri} priority<span class="pill">${f.tag}</span></span><div><b>${esc(f.title)}</b></div><div>${esc(f.body)}</div></div>`).join('')}
+<div class="note">"Data" means the finding comes from the competitors measured here. "Best practice" means general guidance, not measured in this market.${n<5?' Only '+n+' competitors were found, so treat benchmarks with caution.':''}</div></div>`;
+
+h+=`<div class="card"><h2>Competitors for "${esc(kw)}" in ${city}</h2><div class="t"><table><tr><th>Rank</th><th>Business</th><th>Primary category</th><th>Extra cats</th><th>Reviews</th><th>Rating</th><th>Photos</th><th>Site</th></tr>
+${comp.map(i=>`<tr><td>#${i.rank_group}</td><td>${esc(i.title)}</td><td>${esc(i.category||'')}</td><td>${(i.additional_categories||[]).length}</td><td>${votes(i)}</td><td>${stars(i)||''}</td><td>${i.total_photos||0}</td><td>${i.domain?yes:no}</td></tr>`).join('')}
+<tr><th></th><th>Median</th><th></th><th>${B.sec}</th><th>${B.rev}</th><th>${B.rat}</th><th>${B.ph}</th><th>${B.web}/${n}</th></tr></table></div></div>`;
+
+h+=`<div class="card"><h2>Categories used by competitors</h2><div class="t"><table><tr><th>Category</th><th>Used by</th><th>Client has it</th></tr>
+${list.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.c} of ${n}</td><td>${x.has?yes:no}</td></tr>`).join('')}</table></div></div>`;
+
+h+=`<div class="card"><h2>Photo plan <span class="pill">Best practice</span></h2>
+<div>Target: about ${tgt} photos (competitor median ${B.ph}, client ${cp}). Add them gradually, around ${Math.max(2,Math.ceil(Math.max(tgt-cp,0)/8))} a week.</div>
+<ul><li>Exterior with the signage and entrance, so customers recognise the place</li><li>Interior and reception or waiting area</li><li>The team, with real faces and names where possible</li><li>The service being delivered (with customer consent)</li><li>Equipment, products or facilities</li><li>Before and after, where relevant to the business</li><li>A clear logo and a good cover photo</li></ul>
+<div class="note">Use real, well-lit photos, not stock images, and avoid heavy text overlays. Competitor photo content is not analysed in this version, only the counts.</div></div>`;
+
+h+=`<div class="card"><h2>4-week post calendar <span class="pill">Best practice</span></h2><ul>
+<li><b>Week 1:</b> Service spotlight: what ${cat} involves, who it is for, how to book in ${city}</li>
+<li><b>Week 2:</b> Customer story or review highlight (with permission)</li>
+<li><b>Week 3:</b> Behind the scenes or meet the team</li>
+<li><b>Week 4:</b> A helpful tip or a frequently asked question, plus any current offer</li></ul>
+<div class="note">Post once or twice a week on the same days, with a clear call to action such as call, book or visit. Competitor posting cadence will be measured in Phase 2.</div></div>`;
+
+h+=`<div class="noprint"><button onclick="window.print()">Print or save as PDF</button><button class="sec" onclick="copySum()">Copy summary</button></div>`;
+$('rep').innerHTML=h;window.lastSummary=client.title+' ('+loc.location+')\n'+F.map(f=>`[${f.pri}] ${f.title}: ${f.body}`).join('\n');
+}
+function copySum(){try{navigator.clipboard.writeText(window.lastSummary||'');$('msg').textContent='Summary copied.'}catch(e){$('msg').textContent='Could not copy. Select the text manually.'}}
+</script></body></html>
