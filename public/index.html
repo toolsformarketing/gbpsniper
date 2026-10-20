@@ -103,14 +103,14 @@ const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),c
 try{try{localStorage.setItem('gbp_code',$('lcode').value);localStorage.setItem('gbp_cc',$('lcountry').value)}catch(e){}
 const d=await call({keyword:$('lkw').value.trim(),...loc});
 $('jin').value=JSON.stringify(d);$('impname').value=cn;importJSON();
-let cost=d.cached?0:d.cost,note=$('imsg').textContent;
+let note=$('imsg').textContent;
 if(cn&&note.indexOf('Client not found')>=0){
-const d2=await call({keyword:cn,...loc});cost+=d2.cached?0:d2.cost;
+const d2=await call({keyword:cn,...loc});
 const ci=d2.items.find(i=>nmatch(i.title,cn));
 if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';$('name').value=cn;
 $('imsg').textContent=note='Competitors imported. The client is not in the top results for this keyword, so its own profile was fetched by name (categories, reviews, rating). Enter 0 for rank in the distance zone that matches this search. Last-90-day counts are not in this data.'}
 else note+=' The client could not be found by name either. Closest results were: '+d2.items.slice(0,3).map(i=>i.title).join(' | ')+'. If one of these is the client, copy its exact name into the Client name box and search again.'}
-m.textContent='Cost $'+cost.toFixed(4)+'. '+note;
+m.textContent=note;
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
 try{$('lcode').value=localStorage.getItem('gbp_code')||'';$('lcountry').value=localStorage.getItem('gbp_cc')||''}catch(e){}
 const nz=s=>String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
