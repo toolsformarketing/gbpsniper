@@ -28,6 +28,7 @@ ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
 #out{display:none}
 </style></head><body><div class="w">
 <h1>GBP Sniper</h1>
+<p class="s" style="margin-bottom:6px"><a href="/report.html">Business report: competitors, benchmarks and plan</a></p>
 <p class="s">Enter what you know about a client's listing and the competitors winning the weak zone. Get the most likely cause and the one action that matters most, not a checklist.</p>
 
 <div class="card"><h2>Live search (DataForSEO)</h2><div class="g">
@@ -37,7 +38,7 @@ ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
 <div><label>City</label><input id="lloc" placeholder="Madurai"></div>
 <div><label>Or coordinates lat,lng,zoom (optional)</label><input id="lcoord" placeholder="9.9252,78.1198,17z"></div>
 <div><label>Client name as on Maps (optional)</label><input id="lclient"></div></div>
-<div style="margin-top:10px"><button onclick="liveSearch()">Search and fill</button></div><div id="lmsg" class="note"></div><div id="cands"></div></div>
+<div style="margin-top:10px"><button onclick="liveSearch()">Search and fill</button></div><div id="lmsg" class="note"></div></div>
 
 <div class="card"><h2>0. Import from DataForSEO (optional)</h2><div class="g"><div><label>Client name as on Google Maps (blank if not in results)</label><input id="impname" placeholder="e.g. Club19 The GYM"></div></div><label style="margin-top:10px">Paste the JSON response of a Google Maps search</label><textarea id="jin" rows="5" placeholder="Paste JSON here"></textarea><div style="margin-top:10px"><button onclick="importJSON()">Import and fill form</button></div><div id="imsg" class="note"></div></div>
 
@@ -48,7 +49,8 @@ ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
 <div><label>Category fit (ignored if categories are filled below)</label><select id="cat"><option value="match">Same as winners</option><option value="partial">Related but different</option><option value="no">Different / generic</option></select></div>
 </div></div>
 
-<div class="card"><h2>1b. Categories (comma-separated, primary first)</h2><div class="g"><div><label>Client primary</label><input id="cp" placeholder="e.g. Dental clinic"></div><div><label>Client secondary</label><input id="cs2" placeholder="e.g. Dentist, Cosmetic dentist"></div><div><label>Winner 1 (primary first)</label><input id="w1" placeholder="Dentist, Cosmetic dentist"></div><div><label>Winner 2</label><input id="w2"></div><div><label>Winner 3</label><input id="w3"></div></div><div class="note">Find them with the GMB Everywhere or PlePer Chrome extension, or the category shown under the name on Maps (primary only).</div></div>
+<div class="card"><h2>1b. Categories (comma-separated, primary first)</h2><div class="g"><div><label>Client primary</label><input id="cp" placeholder="e.g. Dental clinic"></div><div><label>Client secondary</label><input id="cs2" placeholder="e.g. Dentist, Cosmetic dentist"></div><div><label>Winner 1 (primary first)</label><input id="w1" placeholder="Dentist, Cosmetic dentist"></div><div><label>Winner 2</label><input id="w2"></div><div><label>Winner 3</label><input id="w3"></div></div><div style="margin-top:10px"><button class="sec" onclick="findClient()">Find client profile</button></div><div id="fmsg" class="note"></div><div id="cands"></div>
+<div class="note">Find them with the GMB Everywhere or PlePer Chrome extension, or the category shown under the name on Maps (primary only).</div></div>
 
 <div class="card"><h2>2. Rank by distance from business (0 = not in top 20)</h2><div class="g">
 <div><label>At business (0–0.5 km)</label><input id="r0" type="number" min="0" max="20" placeholder="blank = unknown"></div>
@@ -97,8 +99,19 @@ const b2=document.createElement('button');b2.className='sec';b2.style.marginTop=
 row.appendChild(b1);row.appendChild(b2);el.appendChild(row)})}
 function loadS(k){const s=st()[k];if(!s)return;const v=s[s.length-1].v;IDS.forEach(i=>{if(v[i]!==undefined)$(i).value=v[i]});window.scrollTo({top:0,behavior:'smooth'})}
 list();
-function useClient(ci,cn){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';if(cn)$('name').value=cn;$('cands').textContent='';const msg='Client set to: '+ci.title+' ('+(ci.category||'no category')+'). Competitors imported. Enter 0 for rank in the distance zone that matches this search.';$('lmsg').textContent=msg;$('imsg').textContent=msg}
+function useClient(ci,cn){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=(ci.rating&&ci.rating.votes_count)||'';$('cs').value=(ci.rating&&ci.rating.value)||'';if(cn)$('name').value=cn;$('cands').textContent='';const msg='Client set to: '+ci.title+' ('+(ci.category||'no category')+'). Enter 0 for rank in the distance zone that matches this search.';$('fmsg').textContent=msg;$('lmsg').textContent='Competitors imported. '+msg;$('imsg').textContent=msg}
 function showCands(list,cn){const el=$('cands');el.textContent='';list.forEach(ci=>{const row=document.createElement('div');row.className='r lo';const d=document.createElement('div');d.textContent=ci.title+' \u00b7 '+(ci.category||'no category')+' \u00b7 '+((ci.rating&&ci.rating.votes_count)||0)+' reviews \u00b7 '+(ci.address||'');row.appendChild(d);const b=document.createElement('button');b.className='sec';b.style.marginTop='6px';b.textContent='Use this as the client';b.onclick=()=>useClient(ci,cn);row.appendChild(b);el.appendChild(row)})}
+function pickClient(d2,cn){const wc=new Set(['w1','w2','w3'].flatMap(i=>$(i).value.split(',')).map(nz).filter(Boolean));
+const ms=d2.items.filter(i=>nmatch(i.title,cn)),fits=ms.filter(i=>cats(i).some(c=>wc.has(nz(c))));
+if(fits.length===1){useClient(fits[0],cn);return $('fmsg').textContent}
+showCands((ms.length?ms:d2.items).slice(0,5),cn);
+return 'Could not confirm the client automatically'+(ms.length?' ('+ms.length+' business'+(ms.length>1?'es':'')+' with a similar name, but their categories do not match this market or there are several)':' (no business with that name was found)')+'. Pick the right one below if it is listed, or enter the client fields by hand.'}
+async function findClient(){const f=$('fmsg'),cn=($('lclient').value||$('impname').value||$('name').value).trim();
+if(!cn){f.textContent='Type the client name first (Client name box in the Live search card).';return}
+const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),country:$('lcountry').value.trim()};
+if(!loc.location&&!loc.coordinate){f.textContent='Enter the city (or coordinates) in the Live search card first.';return}
+f.textContent='Looking up the client...';$('cands').textContent='';
+try{const d2=await call({keyword:cn,...loc});const msg=pickClient(d2,cn);f.textContent=msg}catch(e){f.textContent=e.message||'Could not reach the server.'}}
 async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';['cp','cs2','cr','cs'].forEach(i=>$(i).value='');$('cands').textContent='';
 const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),country:$('lcountry').value.trim()},cn=$('lclient').value.trim();
@@ -108,10 +121,7 @@ $('jin').value=JSON.stringify(d);$('impname').value=cn;importJSON();
 let note=$('imsg').textContent;
 if(cn&&note.indexOf('Client not found')>=0){
 const d2=await call({keyword:cn,...loc});
-const wc=new Set(['w1','w2','w3'].flatMap(i=>$(i).value.split(',')).map(nz).filter(Boolean));
-const ms=d2.items.filter(i=>nmatch(i.title,cn)),fits=ms.filter(i=>cats(i).some(c=>wc.has(nz(c))));
-if(fits.length===1){useClient(fits[0],cn);note=$('lmsg').textContent}
-else{note='Competitors imported, but the client could not be confirmed automatically'+(ms.length?' ('+ms.length+' business'+(ms.length>1?'es':'')+' with a similar name, but their categories do not match this market or there are several)':' (no business with that name was found)')+'. Pick the right one below if it is listed, or leave the client fields blank and enter them by hand.';showCands((ms.length?ms:d2.items).slice(0,5),cn)}
+note='Competitors imported. '+pickClient(d2,cn);$('fmsg').textContent=note;
 }
 m.textContent=note;
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
@@ -137,7 +147,7 @@ $('wr').value=Math.round(avg(win.map(vc)));
 $('ws').value=avg(win.map(rv)).toFixed(1);
 if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=vc(ci);$('cs').value=rv(ci)||4.5}
 const names=win.map(w=>w.title).join(', ');
-m.textContent=ci?`Imported. Client found at rank #${ci.rank_group} for this search. Competitors used: ${names}. Enter that rank in the matching distance zone in section 2, and add last-90-day review counts (not in this data).`:`Imported the top 3 as competitors: ${names}. Client not found in these results, so enter the client's own categories (1b) and reviews (3) by hand. Last-90-day counts are not in this data.`;
+m.textContent=ci?`Imported. Client found at rank #${ci.rank_group} for this search. Competitors used: ${names}. Enter that rank in the matching distance zone in section 2, and add last-90-day review counts (not in this data).`:`Imported the top 3 as competitors: ${names}. Client not found in these results. Click 'Find client profile' in section 1b to fetch it, or enter the client's own categories (1b) and reviews (3) by hand. Last-90-day counts are not in this data.`;
 }
 function demo(){window.winMeta=null;const v={cp:'Dental clinic',cs2:'Dentist',w1:'Dentist, Cosmetic dentist, Emergency dental service',w2:'Dentist, Teeth whitening service, Emergency dental service',w3:'Dentist, Cosmetic dentist, Orthodontist',name:'Smile Dental',kw:'dentist near me',pack:'y',cat:'partial',r0:2,r1:6,r2:14,r3:0,cr:48,wr:210,cv:3,wv:22,cs:4.4,ws:4.8,sp:'t',lp:'n',rk:'s',nap:'n',bad:'n',po:3};for(const k in v)$(k).value=v[k]}
 function run(){
