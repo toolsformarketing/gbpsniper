@@ -33,6 +33,7 @@ ul{margin:6px 0 0 18px;padding:0;color:var(--mut)}
 <div class="card"><h2>Live search (DataForSEO)</h2><div class="g">
 <div><label>Access code</label><input id="lcode" type="password" autocomplete="off"></div>
 <div><label>Keyword</label><input id="lkw" placeholder="gym near me"></div>
+<div><label>Country (2-letter code)</label><input id="lcountry" list="ccl" maxlength="2" placeholder="IN" style="text-transform:uppercase"><datalist id="ccl"><option value="US">United States</option><option value="GB">United Kingdom</option><option value="CA">Canada</option><option value="AU">Australia</option><option value="NZ">New Zealand</option><option value="IE">Ireland</option><option value="IN">India</option><option value="PK">Pakistan</option><option value="BD">Bangladesh</option><option value="LK">Sri Lanka</option><option value="NP">Nepal</option><option value="SG">Singapore</option><option value="MY">Malaysia</option><option value="ID">Indonesia</option><option value="PH">Philippines</option><option value="TH">Thailand</option><option value="VN">Vietnam</option><option value="JP">Japan</option><option value="KR">South Korea</option><option value="HK">Hong Kong</option><option value="AE">United Arab Emirates</option><option value="SA">Saudi Arabia</option><option value="QA">Qatar</option><option value="KW">Kuwait</option><option value="OM">Oman</option><option value="BH">Bahrain</option><option value="IL">Israel</option><option value="TR">Turkey</option><option value="EG">Egypt</option><option value="NG">Nigeria</option><option value="KE">Kenya</option><option value="ZA">South Africa</option><option value="GH">Ghana</option><option value="DE">Germany</option><option value="FR">France</option><option value="ES">Spain</option><option value="IT">Italy</option><option value="NL">Netherlands</option><option value="BE">Belgium</option><option value="CH">Switzerland</option><option value="AT">Austria</option><option value="SE">Sweden</option><option value="NO">Norway</option><option value="DK">Denmark</option><option value="FI">Finland</option><option value="PL">Poland</option><option value="PT">Portugal</option><option value="GR">Greece</option><option value="BR">Brazil</option><option value="MX">Mexico</option><option value="AR">Argentina</option><option value="CL">Chile</option><option value="CO">Colombia</option><option value="PE">Peru</option></datalist></div>
 <div><label>City</label><input id="lloc" placeholder="Madurai"></div>
 <div><label>Or coordinates lat,lng,zoom (optional)</label><input id="lcoord" placeholder="9.9252,78.1198,17z"></div>
 <div><label>Client name as on Maps (optional)</label><input id="lclient"></div></div>
@@ -98,8 +99,8 @@ function loadS(k){const s=st()[k];if(!s)return;const v=s[s.length-1].v;IDS.forEa
 list();
 async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';
-const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim()},cn=$('lclient').value.trim();
-try{try{localStorage.setItem('gbp_code',$('lcode').value)}catch(e){}
+const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),country:$('lcountry').value.trim()},cn=$('lclient').value.trim();
+try{try{localStorage.setItem('gbp_code',$('lcode').value);localStorage.setItem('gbp_cc',$('lcountry').value)}catch(e){}
 const d=await call({keyword:$('lkw').value.trim(),...loc});
 $('jin').value=JSON.stringify(d);$('impname').value=cn;importJSON();
 let cost=d.cached?0:d.cost,note=$('imsg').textContent;
@@ -111,7 +112,7 @@ note='Competitors imported. The client is not in the top results for this keywor
 else note+=' The client could not be found by name either. Check the spelling exactly as on Google Maps.'}
 m.textContent='Cost $'+cost.toFixed(4)+'. '+note;
 }catch(e){m.textContent=e.message||'Could not reach the server.'}}
-try{$('lcode').value=localStorage.getItem('gbp_code')||''}catch(e){}
+try{$('lcode').value=localStorage.getItem('gbp_code')||'';$('lcountry').value=localStorage.getItem('gbp_cc')||''}catch(e){}
 function findR(o){if(!o||typeof o!=='object')return null;if(Array.isArray(o.items)&&o.items.length&&o.items[0].title!==undefined)return o;for(const k in o){const r=findR(o[k]);if(r)return r}return null}
 function cats(it){return [it.category,...(it.additional_categories||[])].filter(Boolean)}
 function importJSON(){
@@ -126,14 +127,14 @@ const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
 const vc=i=>(i.rating&&i.rating.votes_count)||0,rv=i=>(i.rating&&i.rating.value)||0;
 if(r.keyword)$('kw').value=r.keyword;
 if(raw)$('name').value=raw;
-win.forEach((w,i)=>$('w'+(i+1)).value=cats(w).join(', '));
+win.forEach((w,i)=>$('w'+(i+1)).value=cats(w).join(', '));window.winMeta=win.map(w=>({rank:w.rank_group,title:w.title,votes:vc(w),rating:rv(w)}));
 $('wr').value=Math.round(avg(win.map(vc)));
 $('ws').value=avg(win.map(rv)).toFixed(1);
 if(ci){$('cp').value=ci.category||'';$('cs2').value=(ci.additional_categories||[]).join(', ');$('cr').value=vc(ci);$('cs').value=rv(ci)||4.5}
 const names=win.map(w=>w.title).join(', ');
 m.textContent=ci?`Imported. Client found at rank #${ci.rank_group} for this search. Competitors used: ${names}. Enter that rank in the matching distance zone in section 2, and add last-90-day review counts (not in this data).`:`Imported the top 3 as competitors: ${names}. Client not found in these results, so enter the client's own categories (1b) and reviews (3) by hand. Last-90-day counts are not in this data.`;
 }
-function demo(){const v={cp:'Dental clinic',cs2:'Dentist',w1:'Dentist, Cosmetic dentist, Emergency dental service',w2:'Dentist, Teeth whitening service, Emergency dental service',w3:'Dentist, Cosmetic dentist, Orthodontist',name:'Smile Dental',kw:'dentist near me',pack:'y',cat:'partial',r0:2,r1:6,r2:14,r3:0,cr:48,wr:210,cv:3,wv:22,cs:4.4,ws:4.8,sp:'t',lp:'n',rk:'s',nap:'n',bad:'n',po:3};for(const k in v)$(k).value=v[k]}
+function demo(){window.winMeta=null;const v={cp:'Dental clinic',cs2:'Dentist',w1:'Dentist, Cosmetic dentist, Emergency dental service',w2:'Dentist, Teeth whitening service, Emergency dental service',w3:'Dentist, Cosmetic dentist, Orthodontist',name:'Smile Dental',kw:'dentist near me',pack:'y',cat:'partial',r0:2,r1:6,r2:14,r3:0,cr:48,wr:210,cv:3,wv:22,cs:4.4,ws:4.8,sp:'t',lp:'n',rk:'s',nap:'n',bad:'n',po:3};for(const k in v)$(k).value=v[k]}
 function run(){
 const C=[];const add=(score,type,why,act)=>score>0&&C.push({score:Math.min(score,98),type,why,act});
 const has=id=>$(id).value.trim()!=='',hasTot=has('cr')&&n('wr')>0,hasVel=has('cv')&&n('wv')>0,hasRat=has('cs')&&has('ws');
@@ -155,8 +156,8 @@ if(pm==='no')add(88,'Category mismatch',`Client primary "${cp}" is not used by a
 else if(pm==='partial')add(55,'Weak category fit',`"${cp}" appears only as a secondary for winners. Their most common primary is "${tp.n}".`,`Test making "${tp.n}" the primary and keep "${cp}" as secondary.`);
 if(!cll.includes(tl)&&pm!=='no'&&false){}
 if(miss.length)add(pm==='match'?42:25,'Missing secondary categories',`Winners use categories the client lacks: ${miss.join(', ')}.`,`Add the ones that genuinely apply: ${miss.slice(0,4).join(', ')}.`);
-const row=(l,a)=>`<div><b>${l}:</b> ${a.map((x,i)=>i?x:'<u>'+x+'</u>').join(', ')}</div>`;
-catHtml='<h2 style="margin-top:14px">Category comparison</h2><div class="s">'+row('Client',cl)+W.map((a,i)=>row('Winner '+(i+1),a)).join('')+(miss.length?`<div style="margin-top:6px"><b>Gap:</b> ${miss.join(', ')}</div>`:'<div style="margin-top:6px">No category gaps found.</div>')+'</div>';
+const esc=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])),wl=i=>{const w=window.winMeta&&window.winMeta[i];return w?'#'+w.rank+' '+w.title.slice(0,45)+' ('+w.votes+' reviews, '+w.rating+'\u2605)':'Winner '+(i+1)},row=(l,a)=>`<div><b>${esc(l)}:</b> ${a.map((x,i)=>i?esc(x):'<u>'+esc(x)+'</u>').join(', ')}</div>`;
+catHtml='<h2 style="margin-top:14px">Category comparison</h2><div class="s">'+row('Client',cl)+W.map((a,i)=>row(wl(i),a)).join('')+(miss.length?`<div style="margin-top:6px"><b>Gap:</b> ${miss.join(', ')}</div>`:'<div style="margin-top:6px">No category gaps found.</div>')+'</div>';
 }else{
 if($('cat').value==='no')add(88,'Category mismatch','Primary category differs from what winners use. Category is the strongest relevance signal.','Change the primary category to match the top 3 winners, then add 2–4 relevant secondary categories.');
 else if($('cat').value==='partial')add(55,'Weak category fit','Category is related but not the one winners use.','Test switching primary to the winners\' category and keep the current one as secondary.');
