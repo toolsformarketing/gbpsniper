@@ -114,20 +114,32 @@ app.post('/api/search', async (req, res) => {
     if (spent >= DAILY_SPEND_CAP)
       return res.status(429).json({ error: 'Daily spend cap reached. Try again tomorrow or raise DAILY_SPEND_CAP_USD.' });
 
-    const r = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
-      body: JSON.stringify([task]),
-      signal: AbortSignal.timeout(60000),
-    });
-    const j = await r.json();
-    const cost = Number(j.cost) || 0;
-    spent += cost;
-    const t = j.tasks && j.tasks[0];
-    if (!r.ok || !t || t.status_code !== 20000)
-      return res.status(502).json({ error: 'Data provider error: ' + ((t && t.status_message) || j.status_message || r.status) });
+    const run = async (tk) => {
+      const r = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify([tk]),
+        signal: AbortSignal.timeout(60000),
+      });
+      const j = await r.json();
+      const c = Number(j.cost) || 0;
+      spent += c;
+      const t = j.tasks && j.tasks[0];
+      if (!r.ok || !t || t.status_code !== 20000)
+        throw Object.assign(new Error('provider'), { providerMsg: (t && t.status_message) || j.status_message || r.status });
+      return { cost: c, raw: (t.result && t.result[0] && t.result[0].items) || [] };
+    };
+    let { cost, raw } = await run(task);
+    // One hit usually means Maps treated the keyword as a single named place; retry as a general search.
+    if (raw.length < 3 && task.search_places) {
+      try {
+        const alt = await run({ ...task, search_places: false });
+        cost += alt.cost;
+        if (alt.raw.length > raw.length) raw = alt.raw;
+      } catch (_) { /* keep the first result */ }
+    }
 
-    const items = ((t.result && t.result[0] && t.result[0].items) || []).filter(i => i.title).map(i => ({
+    const items = raw.filter(i => i.title).map(i => ({
       rank_group: i.rank_group,
       title: i.title,
       place_id: i.place_id,
@@ -149,6 +161,7 @@ app.post('/api/search', async (req, res) => {
     res.json(data);
   } catch (e) {
     console.error('[search] failed', e);
+    if (e && e.providerMsg) return res.status(502).json({ error: 'Data provider error: ' + e.providerMsg });
     res.status(502).json({ error: 'Could not reach the data provider (' + ((e && e.message) || 'unknown') + ').' });
   }
 });
