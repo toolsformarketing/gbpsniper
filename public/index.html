@@ -112,7 +112,7 @@ const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),c
 if(!loc.location&&!loc.coordinate){f.textContent='Enter the city (or coordinates) in the Live search card first.';return}
 f.textContent='Looking up the client...';$('cands').textContent='';
 try{const d2=await call({keyword:cn,...loc});const msg=pickClient(d2,cn);f.textContent=msg}catch(e){f.textContent=e.message||'Could not reach the server.'}}
-async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
+async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('lcode').value},body:JSON.stringify(body)});const tx=await r.text();let d;try{d=JSON.parse(tx)}catch(e){throw new Error('The server sent an unexpected reply (HTTP '+r.status+'). It may be down or restarting, or this page is not being served by your Railway app. Open /health on the same address to check.')}if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 async function liveSearch(){const m=$('lmsg');m.textContent='Searching...';['cp','cs2','cr','cs'].forEach(i=>$(i).value='');$('cands').textContent='';
 const loc={location:$('lloc').value.trim(),coordinate:$('lcoord').value.trim(),country:$('lcountry').value.trim()},cn=$('lclient').value.trim();
 try{try{localStorage.setItem('gbp_code',$('lcode').value);localStorage.setItem('gbp_cc',$('lcountry').value)}catch(e){}
