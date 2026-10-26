@@ -55,7 +55,7 @@ const votes=i=>(i.rating&&i.rating.votes_count)||0,stars=i=>(i.rating&&i.rating.
 const cats=i=>[i.category,...(i.additional_categories||[])].filter(Boolean);
 try{$('code').value=localStorage.getItem('gbp_code')||'';$('cc').value=localStorage.getItem('gbp_cc')||''}catch(e){}
 
-async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Search failed.');return d}
+async function call(body){const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json','x-access-code':$('code').value},body:JSON.stringify(body)});const tx=await r.text();let d;try{d=JSON.parse(tx)}catch(e){throw new Error('The server sent an unexpected reply (HTTP '+r.status+'). It may be down or restarting, or this page is not being served by your Railway app. Open /health on the same address to check.')}if(!r.ok)throw new Error(d.error||'Search failed.');return d}
 
 function simList(items,name){const seen=new Set(),tf={};items.forEach(i=>new Set(nz(i.title).split(' ')).forEach(w=>tf[w]=(tf[w]||0)+1));
 const gen=new Set(Object.keys(tf).filter(w=>tf[w]>=items.length*0.4));
