@@ -153,6 +153,8 @@ app.post('/api/search', async (req, res) => {
   }
 });
 
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found.' }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use((err, _req, res, _next) => { console.error('[error]', err.message); res.status(err.status || 500).json({ error: err.type === 'entity.parse.failed' ? 'Bad request.' : 'Server error.' }); });
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log('GBP Sniper listening on ' + port));
