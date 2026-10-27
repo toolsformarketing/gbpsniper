@@ -69,6 +69,15 @@ async function resolveLocation(text, country) {
   return cities.length ? cities : m;
 }
 
+function hoursWeek(wh) {
+  try {
+    const tt = wh && wh.timetable; if (!tt) return null;
+    let m = 0;
+    for (const d in tt) (tt[d] || []).forEach(p => { const o = p.open.hour * 60 + p.open.minute; let c = p.close.hour * 60 + p.close.minute; if (c <= o) c += 1440; m += c - o; });
+    return Math.round(m / 60);
+  } catch (e) { return null; }
+}
+
 app.get('/health', (_req, res) => res.json({ ok: true, configured: { DFS_LOGIN: !!DFS_LOGIN, DFS_PASSWORD: !!DFS_PASSWORD, ACCESS_CODE: !!ACCESS_CODE } }));
 
 app.post('/api/search', async (req, res) => {
@@ -154,6 +163,7 @@ app.post('/api/search', async (req, res) => {
       latitude: i.latitude,
       longitude: i.longitude,
       is_claimed: i.is_claimed,
+      hours_week: hoursWeek(i.work_hours),
     }));
     const data = { keyword, location: where, coordinate, cost, items };
     cacheSet(key, data);
