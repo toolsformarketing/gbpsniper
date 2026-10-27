@@ -26,6 +26,11 @@ th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);vertical
 .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 .kv div b{display:block;font-size:20px}.kv div span{font-size:12px;color:var(--mut)}
 ul{margin:6px 0 0 18px;padding:0}
+summary{cursor:pointer}summary.why{font-size:18px;font-weight:700;color:var(--ac)}
+details.cmp{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--bg)}
+details.cmp>summary{font-weight:600}.chips{font-weight:400;color:var(--mut);font-size:13px}
+.v-ahead{color:var(--hi);font-weight:700}.v-behind{color:var(--ac);font-weight:700}.v-even,.v-na{color:var(--mut)}
+.fix{margin:2px 0 8px 0;font-size:13px;color:var(--mut)}
 @media print{.noprint{display:none}body{background:#fff;color:#000}.card{break-inside:avoid}}
 </style></head><body><div class="w">
 <h1>Business report</h1>
@@ -89,6 +94,60 @@ $('msg').textContent='Analysing competitors for "'+kw+'"...';
 let d=await call({keyword:kw,...loc});
 if(d.items.filter(i=>i.place_id!==client.place_id).length<3&&loc.coordinate){$('msg').textContent='Few results nearby, widening the search area...';const d2=await call({keyword:kw,...loc,coordinate:wider(loc.coordinate)});if(d2.items.length>d.items.length)d=d2}
 $('msg').textContent='';render(client,d,kw,loc)}
+
+const STOP=new Set(['near','best','the','and','for','top','in','me','my','of','a']);
+const hav=(a,b,c,d)=>{const R=6371,r=x=>x*Math.PI/180,dl=r(c-a),dn=r(d-b),q=Math.sin(dl/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(q))};
+const num=(a,b,hi,lo)=>{const r=a/Math.max(b,1);return r>=hi?'ahead':r<=lo?'behind':'even'};
+function gaps(client,c,x){
+const F=[],p=(key,label,pat,w,them,you,verdict,st,why,fix)=>F.push({key,label,pat,w,them,you,verdict,st:Math.max(0,Math.min(1,st||0)),why,fix});
+const cc=cn(c.category),kc=cn(client.category),cons=cn(x.top?x.top.n:'');
+p('cat','Primary category','the main category most competitors use',5,c.category||'none',client.category||'none',cc===cons&&kc!==cons?'ahead':kc===cons&&cc!==cons?'behind':'even',1,
+`Their primary category matches the market's most common one ("${x.top?x.top.n:''}"). Primary category is among the strongest relevance signals.`,`Switch to "${x.top?x.top.n:''}" only if it truly describes the business, and keep your current one as a secondary.`);
+const th=new Set(cats(c).map(cn)),lack=(c.additional_categories||[]).filter(a=>!x.mine.has(cn(a))&&(x.fq[cn(a)]||{c:0}).c>=x.thr),rev=(client.additional_categories||[]).filter(a=>!th.has(cn(a))&&(x.fq[cn(a)]||{c:0}).c>=x.thr);
+p('sec','Relevant secondary categories','relevant secondary categories you lack',3,(c.additional_categories||[]).length+' extra',(client.additional_categories||[]).length+' extra',lack.length>rev.length?'ahead':lack.length<rev.length?'behind':'even',lack.length/3,
+lack.length?`They use categories the client lacks: ${lack.slice(0,5).join(', ')}.`:'',`Add the ones that genuinely apply: ${lack.slice(0,5).join(', ')}.`);
+const rc=votes(c),rk=votes(client),rr=rc/Math.max(rk,1);
+p('rev','Review count','more reviews',5,rc,rk,num(rc,rk,1.25,0.8),(rr-1)/2,`They have ${rc} reviews to your ${rk}. Review volume is a major prominence signal.`,`Close the gap of about ${Math.max(rc-rk,0)} reviews: ask every happy customer, and have the request mention the service and area.`);
+const sd=stars(c)-stars(client);
+p('rat','Rating','a higher rating',2,stars(c)||'-',stars(client)||'-',stars(c)&&stars(client)?(sd>=0.2?'ahead':sd<=-0.2?'behind':'even'):'na',sd/0.5,`Their rating is ${stars(c)} against your ${stars(client)}.`,'Reply to every review, fix recurring complaints, and ask satisfied customers to review.');
+const pc=c.total_photos||0,pk=client.total_photos||0;
+p('ph','Photos','more photos',1.5,pc,pk,num(pc,pk,1.3,0.77),(pc/Math.max(pk,1)-1)/2,`They have ${pc} photos to your ${pk}.`,`Add about ${Math.max(pc-pk,0)} real photos gradually (exterior, interior, team, the service in action).`);
+p('web','Website','a website you lack',2,c.domain?'Yes':'No',client.domain?'Yes':'No',c.domain&&!client.domain?'ahead':!c.domain&&client.domain?'behind':'even',1,'They link a website and you do not.','Add a website with a page for your main service and area.');
+const stem=w=>w.slice(0,5),cnt=title=>{const tt=nz(title).split(' ').map(stem);return x.kws.filter(k=>tt.includes(stem(k))).length};
+const nc=cnt(c.title),nk=cnt(client.title);
+p('name','Search words in the business name','search words in their business name',2,nc+' of '+x.kws.length,nk+' of '+x.kws.length,nc>nk?'ahead':nc<nk?'behind':'even',(nc-nk)/2,`Their name contains words from the search ("${x.kws.join(' ')}"). Google gives the name some weight.`,'Do not change your name to add keywords. Google can suspend profiles whose name differs from the real one. Use your description, services and website for those words instead.');
+let dC=null,dK=null;if(x.cen&&c.latitude!=null&&client.latitude!=null){dC=hav(x.cen[0],x.cen[1],c.latitude,c.longitude);dK=hav(x.cen[0],x.cen[1],client.latitude,client.longitude)}
+p('dist','Distance from the centre of the search area (estimated)','a location closer to the centre',3,dC==null?'-':dC.toFixed(1)+' km',dK==null?'-':dK.toFixed(1)+' km',dC==null?'na':dK-dC>=1?'ahead':dC-dK>=1?'behind':'even',dC==null?0:(dK-dC)/5,`They are about ${dC==null?'?':(dK-dC).toFixed(1)} km closer to the middle of the area. Distance is a major local ranking factor.`,'You cannot move the business. Offset it with reviews, strong categories, a website page for each area you serve, and reviews that mention the area.');
+p('clm','Listing claimed','a verified listing (yours is not)',4,c.is_claimed===false?'No':'Yes',client.is_claimed===false?'No':'Yes',c.is_claimed!==false&&client.is_claimed===false?'ahead':'even',1,'Their listing is claimed and yours is not.','Claim and verify the profile first.');
+const hc=c.hours_week,hk=client.hours_week;
+p('hrs','Weekly opening hours listed','longer opening hours',1,hc==null?'-':hc+' h',hk==null?'none listed':hk+' h',hc==null?'na':hk==null||hc-hk>=10?'ahead':hk-hc>=10?'behind':'even',hk==null?1:(hc-hk)/30,`They list ${hc} hours a week and you list ${hk==null?'none':hk}.`,'Add accurate opening hours, including holidays.');
+p('tel','Phone number','a phone number you lack',0.5,c.phone?'Yes':'No',client.phone?'Yes':'No',c.phone&&!client.phone?'ahead':'even',1,'They list a phone number and you do not.','Add your phone number.');
+return F}
+
+function whyCard(client,ahead,self,d,kw,loc,top,fq,thr,mine,comp){
+const kws=nz(kw).split(' ').filter(w=>w.length>2&&!STOP.has(w)&&!nz(loc.location||'').split(' ').includes(w));
+let cen=null;const m=(loc.coordinate||'').split(',').map(parseFloat);
+if(m.length>=2&&!isNaN(m[0])&&!isNaN(m[1]))cen=[m[0],m[1]];else{const la=d.items.map(i=>i.latitude).filter(v=>v!=null),lo=d.items.map(i=>i.longitude).filter(v=>v!=null);if(la.length)cen=[med(la),med(lo)]}
+const x={top,fq,thr,mine,kws,cen};
+if(!ahead.length)return '<div class="card" id="why"><h2>Why are my competitors ahead of me?</h2><div>The client ranks #1 for this search, so no competitor is ahead. Use the plan below to defend the position.</div></div>';
+const rows=ahead.map(c=>({c,F:gaps(client,c,x),ix:comp.indexOf(c)}));
+rows.forEach(r=>{r.top=r.F.filter(f=>f.verdict==='ahead').map(f=>({f,s:f.w*f.st})).sort((a,b)=>b.s-a.s)});
+const pat={};rows.forEach(r=>r.F.forEach(f=>{if(f.verdict==='ahead'){pat[f.key]=pat[f.key]||{f,c:0};pat[f.key].c++}}));
+const pl=Object.values(pat).sort((a,b)=>(b.c*b.f.w)-(a.c*a.f.w)).slice(0,6);
+const nm=ahead.length;
+let h='<div class="card" id="why"><details id="whyd"><summary class="why">Why are my competitors ahead of me? <span class="pill">click to explore</span></summary>';
+h+=`<div class="note">${self?`The client ranks #${self.rank_group} for "${esc(kw)}". `:`The client is not in the top ${d.items.length} results for "${esc(kw)}". `}${nm} competitor${nm>1?'s are':' is'} ahead. Below: the pattern across them, then a head-to-head for each. Everything here is measured from Google Maps data.</div>`;
+h+='<h2 style="margin-top:14px">The pattern</h2>';
+h+=pl.length?'<ul>'+pl.map(o=>`<li><b>${o.c} of ${nm}</b> have ${esc(o.f.pat)}</li>`).join('')+'</ul>':'<div>No clear measurable gap. The competitors may be ahead because of signals this version cannot see (listed at the bottom).</div>';
+h+='<h2 style="margin-top:14px">Head-to-head</h2>';
+rows.forEach((r,i)=>{const c=r.c,tp=r.top.slice(0,3);
+h+=`<details class="cmp" id="c${r.ix}"><summary>#${c.rank_group} ${esc(c.title.slice(0,60))} <span class="chips">${tp.length?'ahead mainly on: '+tp.map(o=>esc(o.f.label.toLowerCase())).join(', '):'no clear measurable gap'}</span></summary>
+<div class="t"><table><tr><th>Factor</th><th>Them</th><th>You</th><th>Result</th></tr>${r.F.map(f=>`<tr><td>${esc(f.label)}</td><td>${esc(f.them)}</td><td>${esc(f.you)}</td><td class="v-${f.verdict}">${{ahead:'They are ahead',behind:'You are ahead',even:'Similar',na:'Not available'}[f.verdict]}</td></tr>`).join('')}</table></div>`;
+const al=r.top;h+=al.length?'<div style="margin-top:8px"><b>How to close the gap, most important first</b></div><ul>'+al.map(o=>`<li><b>${esc(o.f.label)}:</b> ${esc(o.f.why)}<div class="fix">Do: ${esc(o.f.fix)}</div></li>`).join('')+'</ul>':'<div style="margin-top:8px">Nothing measurable explains this one. Check the signals listed at the bottom.</div>';
+h+='</details>'});
+h+='<div class="note"><b>Not measured in this version, and also used by Google:</b> how recently and how often reviews arrive, what the reviews say, posts and Q&amp;A, the website\'s content and links from other sites, listings on other directories, and the services or products listed. Check these manually for the top competitors, or wait for the next phase.</div>';
+h+='</details></div>';return h}
+function openWhy(ix){const d=$('whyd');if(!d)return;d.open=true;const c=ix>=0?$('c'+ix):null;if(c)c.open=true;(c||$('why')).scrollIntoView({behavior:'smooth',block:'start'})}
 function wider(c){const p=c.split(',');const z=parseInt((p[2]||'').replace(/z/i,''))||13;return p[0]+','+p[1]+','+Math.max(9,z-3)+'z'}
 
 function render(client,d,kw,loc){
@@ -115,20 +174,22 @@ if(!client.domain&&B.web>=Math.ceil(n*0.5))add('Medium','Data','No website liste
 add('Low','Best practice','Posts: start simple','Competitor posting is not measured in this version (planned for Phase 2). Posts mainly help engagement and conversions, not rankings. A reasonable start is 1 to 2 posts a week using the calendar below.');
 const ord={High:0,Medium:1,Low:2};F.sort((a,b)=>ord[a.pri]-ord[b.pri]);
 
+const ahead=comp.filter(c=>!self||c.rank_group<self.rank_group),aheadIds=new Set(ahead.map(c=>c.place_id));
 const yes='\u2713',no='\u2013',city=esc(loc.location||'this area'),cat=esc(client.category||'your service');
 let h='';
 h+=`<div class="card"><h2>${esc(client.title)}</h2><div class="s">${esc(client.address||'')}</div><div class="kv">
 <div><b>${esc(client.category||'None')}</b><span>Primary category</span></div><div><b>${(client.additional_categories||[]).length}</b><span>Secondary categories</span></div>
 <div><b>${cv}</b><span>Reviews</span></div><div><b>${cs||'-'}</b><span>Rating</span></div><div><b>${cp}</b><span>Photos</span></div>
 <div><b>${client.domain?yes:no}</b><span>Website</span></div><div><b>${self?'#'+self.rank_group:'Not in top '+d.items.length}</b><span>Rank for "${esc(kw)}"</span></div></div>
-<div class="note">If this is not your client, search again with the exact Google Maps name.</div></div>`;
+<div style="margin-top:10px"><a href="#why" onclick="openWhy(-1);return false"><b>Why are my competitors ahead of me? \u2192</b></a></div><div class="note">If this is not your client, search again with the exact Google Maps name.</div></div>`;
+h+=whyCard(client,ahead,self,d,kw,loc,top,fq,thr,mine,comp);
 
 h+=`<div class="card"><h2>What to do, in priority order</h2>${F.map(f=>`<div class="r ${f.pri}"><span class="tag">${f.pri} priority<span class="pill">${f.tag}</span></span><div><b>${esc(f.title)}</b></div><div>${esc(f.body)}</div></div>`).join('')}
 <div class="note">"Data" means the finding comes from the competitors measured here. "Best practice" means general guidance, not measured in this market.${n<5?' Only '+n+' competitors were found, so treat benchmarks with caution.':''}</div></div>`;
 
-h+=`<div class="card"><h2>Competitors for "${esc(kw)}" in ${city}</h2><div class="t"><table><tr><th>Rank</th><th>Business</th><th>Primary category</th><th>Extra cats</th><th>Reviews</th><th>Rating</th><th>Photos</th><th>Site</th></tr>
-${comp.map(i=>`<tr><td>#${i.rank_group}</td><td>${esc(i.title)}</td><td>${esc(i.category||'')}</td><td>${(i.additional_categories||[]).length}</td><td>${votes(i)}</td><td>${stars(i)||''}</td><td>${i.total_photos||0}</td><td>${i.domain?yes:no}</td></tr>`).join('')}
-<tr><th></th><th>Median</th><th></th><th>${B.sec}</th><th>${B.rev}</th><th>${B.rat}</th><th>${B.ph}</th><th>${B.web}/${n}</th></tr></table></div></div>`;
+h+=`<div class="card"><h2>Competitors for "${esc(kw)}" in ${city}</h2><div class="t"><table><tr><th>Rank</th><th>Business</th><th>Primary category</th><th>Extra cats</th><th>Reviews</th><th>Rating</th><th>Photos</th><th>Site</th><th>Why ahead?</th></tr>
+${comp.map((i,ix)=>`<tr><td>#${i.rank_group}</td><td>${esc(i.title)}</td><td>${esc(i.category||'')}</td><td>${(i.additional_categories||[]).length}</td><td>${votes(i)}</td><td>${stars(i)||''}</td><td>${i.total_photos||0}</td><td>${i.domain?yes:no}</td><td>${aheadIds.has(i.place_id)?'<a href="#why" onclick="openWhy('+ix+');return false">Why?</a>':''}</td></tr>`).join('')}
+<tr><th></th><th>Median</th><th></th><th>${B.sec}</th><th>${B.rev}</th><th>${B.rat}</th><th>${B.ph}</th><th>${B.web}/${n}</th><th></th></tr></table></div></div>`;
 
 h+=`<div class="card"><h2>Categories used by competitors</h2><div class="t"><table><tr><th>Category</th><th>Used by</th><th>Client has it</th></tr>
 ${list.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.c} of ${n}</td><td>${x.has?yes:no}</td></tr>`).join('')}</table></div></div>`;
